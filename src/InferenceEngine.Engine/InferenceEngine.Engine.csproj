@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\InferenceEngine.Core\InferenceEngine.Core.csproj" />
+    <ProjectReference Include="..\InferenceEngine.Models\InferenceEngine.Models.csproj" />
+    <ProjectReference Include="..\InferenceEngine.Tokenizers\InferenceEngine.Tokenizers.csproj" />
+  </ItemGroup>
+
+</Project>

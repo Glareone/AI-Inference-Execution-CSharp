@@ -1,0 +1,52 @@
+# AGENTS.md
+
+Ground rules for any AI coding assistant working in this repository (Claude Code, Codex,
+Qwen Code, opencode, or otherwise). See [README.md](README.md) for the project's purpose
+and inspiration.
+
+## What this project is
+
+A guided investigation into how LLM inference engines work, in C#/.NET — inspired by and
+explicitly benchmarked against [dotLLM](https://github.com/kkokosa/dotLLM). We are not
+trying to out-build dotLLM. We're building a smaller version to *understand* the pieces
+(model loading, tokenization, attention, sampling, KV-cache, serving), reusing existing
+libraries wherever that's reasonable.
+
+## Stack
+
+- Target **.NET 10** (latest LTS as of writing) unless a specific dependency forces
+  otherwise — note the reason in an ADR if so.
+- Prefer well-maintained NuGet packages over reimplementing math/tokenization/model-parsing
+  kernels. The point of this project is understanding the *architecture* of an inference
+  engine, not re-deriving BLAS or a BPE tokenizer from first principles.
+- Only reach for a hand-rolled implementation when no reasonable library exists, or when the
+  point of the current work *is* to learn that specific piece by building it. Say which,
+  explicitly, when you do it.
+
+## `unsafe` code policy
+
+`unsafe` / raw pointers / unmanaged memory are allowed only in narrow, explicitly justified
+cases (e.g. a tensor buffer on a proven hot path). Before writing `unsafe` code:
+
+1. State *where* it's needed and *why* a managed alternative isn't good enough (with a
+   number, if it's a perf claim — not a guess).
+2. Get explicit confirmation from the user before landing it. Don't introduce `unsafe` blocks
+   speculatively "in case we need the speed later."
+3. Keep the `unsafe` surface as small as possible — wrap it behind a safe API.
+
+## Architecture decisions
+
+Non-trivial design decisions (tokenizer library choice, GGUF loading strategy, tensor memory
+model, KV-cache design, etc.) get an ADR in [architecture/](architecture/), using the
+[MADR](https://adr.github.io/madr/) format (template at `architecture/0000-template.md`). Write
+or review these with the `adr-writer-reviewer` agent if using Claude Code (see
+[.claude/agents/](.claude/agents/)); otherwise just follow the template directly.
+
+## Working style
+
+- Small, reviewable steps over big-bang implementations. Document the plan before writing
+  a nontrivial chunk of code.
+- Update [CHANGELOG.md](CHANGELOG.md) for user-visible or architecturally notable changes.
+- Don't add abstractions, config flags, or error handling for cases that can't happen yet.
+  This is an investigation project — prefer the simplest thing that demonstrates the concept
+  correctly, and note follow-ups instead of speculatively building for them.

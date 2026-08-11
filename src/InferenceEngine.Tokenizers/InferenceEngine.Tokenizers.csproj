@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\InferenceEngine.Core\InferenceEngine.Core.csproj" />
+  </ItemGroup>
+
+</Project>
