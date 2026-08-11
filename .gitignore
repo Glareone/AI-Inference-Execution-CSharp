@@ -5,6 +5,7 @@ out/
 
 # VS / Rider
 .vs/
+.idea/
 *.user
 *.suo
 
