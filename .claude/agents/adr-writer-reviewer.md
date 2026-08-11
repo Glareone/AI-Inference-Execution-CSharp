@@ -23,6 +23,15 @@ existing ADRs are numbered `NNNN-title.md` in the same directory.
    reviewable steps) rather than generic architecture platitudes.
 5. Do not mark an ADR `accepted` on your own judgment — propose it and ask the user to
    confirm, unless they've already stated the decision explicitly in the conversation.
+6. Add an entry to the "Decision Log" table with today's date and "Initial proposal" (or
+   "Initial acceptance" if accepted immediately).
+
+## Amending an accepted ADR
+
+Don't silently rewrite the body of an accepted ADR. If the decision changes, add a row to
+its "Decision Log" table describing the change and why, and update Status/content only as
+much as needed to reflect the new decision — or write a new ADR that supersedes it if the
+change is substantial enough to warrant its own record.
 
 ## Reviewing an existing ADR
 
