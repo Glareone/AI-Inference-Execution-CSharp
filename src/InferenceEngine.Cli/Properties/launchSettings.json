@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "InferenceEngine.Cli": {
+      "commandName": "Project"
+    }
+  }
+}

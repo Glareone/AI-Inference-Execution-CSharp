@@ -32,7 +32,10 @@ rather than reimplementing math kernels from scratch.
 
 ## Status
 
-Early scaffolding. No engine code yet — see [CHANGELOG.md](CHANGELOG.md) for progress.
+Early scaffolding: solution/project layout exists (see
+[ADR-0001](architecture/0001-solution-and-project-layout.md)) with a runnable but empty CLI.
+No model loading, tokenization, or generation yet — see [CHANGELOG.md](CHANGELOG.md) for
+progress.
 
 ## Project docs
 
