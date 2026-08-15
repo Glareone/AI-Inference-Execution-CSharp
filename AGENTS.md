@@ -42,6 +42,22 @@ model, KV-cache design, etc.) get an ADR in [architecture/](architecture/), usin
 or review these with the `adr-writer-reviewer` agent if using Claude Code (see
 [.claude/agents/](.claude/agents/)); otherwise just follow the template directly.
 
+## Investigation workflow
+
+Before implementing a component, research it first using the investigation agents
+(`researcher`, `huggingface-explorer`, `code-reader`). Document findings in
+`investigation/`, then write an ADR (MADR format, in `architecture/`) capturing both
+the understanding and the implementation decision. This ensures we understand *why*
+things are designed the way they are, not just *how* to call an API.
+
+Reference materials and external projects:
+- **[dotLLM](https://github.com/kkokosa/dotLLM)** — primary reference (pure C# inference engine)
+- **[LLamaSharp](https://github.com/SciSharp/LLamaSharp)** — API design patterns
+- **[llama.cpp](https://github.com/ggml-org/llama.cpp)** — GGUF format origin, algorithms
+- **[Microsoft.ML.Tokenizers](https://www.nuget.org/packages/Microsoft.ML.Tokenizers)** — tokenizer candidate
+
+Test model: SmolLM2-135M-Instruct (bartowski Q4_K_M, 101 MB) — installed via dotLLM CLI.
+
 ## Working style
 
 - Small, reviewable steps over big-bang implementations. Document the plan before writing
