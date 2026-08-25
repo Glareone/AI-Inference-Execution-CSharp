@@ -80,7 +80,7 @@ knowledge_base:
   code_guidelines:
     enabled: true
     filePatterns:
-      - path: "AGENTS.md"
-      - path: "CLAUDE.md"
+      - "AGENTS.md"
+      - "CLAUDE.md"
   learnings:
     scope: "local"
