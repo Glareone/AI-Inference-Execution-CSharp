@@ -1,0 +1,86 @@
+language: "en-US"
+tone_instructions: "Be direct and technical. Focus on correctness, performance, and adherence to project conventions."
+early_access: false
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: false
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: true
+  poem: false
+  estimate_code_review_effort: true
+  assess_linked_issues: true
+  related_issues: true
+  related_prs: true
+  suggested_labels: false
+  suggested_reviewers: false
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    ignore_title_keywords:
+      - "WIP"
+      - "DO NOT MERGE"
+    base_branches:
+      - "main"
+
+  path_filters:
+    - "!bin/**"
+    - "!obj/**"
+    - "!.vs/**"
+    - "!.idea/**"
+    - "!**/*.DotSettings"
+
+  path_instructions:
+    - path: "**/*.cs"
+      instructions: |
+        This is a C#/.NET 10 project building an LLM inference engine for learning purposes.
+        Review for:
+        - Correct use of Span<T>, Memory<T>, and modern .NET APIs
+        - Any unsafe code must be explicitly justified (see AGENTS.md unsafe policy)
+        - Prefer library reuse over hand-rolling math/tokenization/parsing kernels
+        - No speculative abstractions or error handling for cases that can't happen yet
+        - No comments explaining WHAT the code does — only WHY when non-obvious
+    - path: "**/*.csproj"
+      instructions: |
+        Verify: target framework is net10.0, dependencies follow the layered architecture
+        from ADR-0001 (Core has no deps; Models/Tokenizers reference Core; Engine references
+        Core+Models+Tokenizers; Cli references Engine).
+    - path: "architecture/**/*.md"
+      instructions: |
+        These are Architecture Decision Records in MADR format. Check that all sections
+        are filled (Context, Decision Drivers, Considered Options, Pros/Cons, Decision
+        Outcome, Consequences). Verify the decision follows from the stated drivers.
+
+tools:
+  gitleaks:
+    enabled: true
+  semgrep:
+    enabled: true
+  markdownlint:
+    enabled: true
+  languagetool:
+    enabled: true
+    level: "picky"
+  shellcheck:
+    enabled: true
+  actionlint:
+    enabled: true
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  opt_out: false
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - path: "AGENTS.md"
+      - path: "CLAUDE.md"
+  learnings:
+    scope: "local"
