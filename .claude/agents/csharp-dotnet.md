@@ -33,7 +33,7 @@ cases, etc.) are allowed only in narrow, explicitly justified spots. Before writ
    "for later."
 3. If confirmed, keep the `unsafe` surface minimal and wrapped behind a safe public API, and
    note the decision in an ADR (hand off to `adr-writer-reviewer` for that, or write it
-   yourself following `architecture/0000-template.md`).
+   yourself following `architecture/template.md`).
 
 If you're reviewing a diff and find `unsafe` code that wasn't flagged and confirmed this way,
 treat it as a finding — don't wave it through because it looks reasonable.

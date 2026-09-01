@@ -1,6 +1,9 @@
-# NNNN. Title of the decision
+<!-- File name: YYMMDD-<slug>.md (e.g. 260811-solution-and-project-layout.md).
+     ADRs sort chronologically by the date prefix; there is no sequential number. -->
 
-- Status: proposed | accepted | rejected | deprecated | superseded by [ADR-NNNN](NNNN-title.md)
+# Title of the decision
+
+- Status: proposed | accepted | rejected | deprecated | superseded by [YYMMDD-slug](YYMMDD-slug.md)
 - Date: YYYY-MM-DD
 
 ## Context and Problem Statement
@@ -25,20 +28,23 @@ best trade-off given the drivers above].
 
 ### Consequences
 
-- Good, because [positive consequence]
-- Bad, because [negative consequence / accepted trade-off]
+Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
+
+- 🟢 [positive consequence]
+- 🟡 [accepted trade-off]
+- 🔴 [downside]
 
 ## Pros and Cons of the Options
 
 ### Option A
 
-- Good, because [argument]
-- Bad, because [argument]
+- 🟢 [upside]
+- 🔴 [downside]
 
 ### Option B
 
-- Good, because [argument]
-- Bad, because [argument]
+- 🟢 [upside]
+- 🔴 [downside]
 
 ## More Information
 

@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 language: "en-US"
 tone_instructions: "Be direct and technical. Focus on correctness, performance, and adherence to project conventions."
 early_access: false
@@ -33,6 +34,8 @@ reviews:
     - "!.vs/**"
     - "!.idea/**"
     - "!**/*.DotSettings"
+    # planned-*.md are intentional ADR placeholders (Status: planned); skip until dated/renamed
+    - "!architecture/planned-*.md"
 
   path_instructions:
     - path: "**/*.cs"
@@ -47,28 +50,30 @@ reviews:
     - path: "**/*.csproj"
       instructions: |
         Verify: target framework is net10.0, dependencies follow the layered architecture
-        from ADR-0001 (Core has no deps; Models/Tokenizers reference Core; Engine references
-        Core+Models+Tokenizers; Cli references Engine).
-    - path: "architecture/**/*.md"
+        from the solution-layout ADR (architecture/260811-solution-and-project-layout.md):
+        Core has no deps; Models/Tokenizers reference Core; Engine references
+        Core+Models+Tokenizers; Cli references Engine.
+    - path: "architecture/[0-9]*-*.md"
       instructions: |
-        These are Architecture Decision Records in MADR format. Check that all sections
-        are filled (Context, Decision Drivers, Considered Options, Pros/Cons, Decision
-        Outcome, Consequences). Verify the decision follows from the stated drivers.
+        These are finalized Architecture Decision Records in MADR format (filename
+        YYMMDD-<slug>.md). Check that all sections are filled (Context, Decision Drivers,
+        Considered Options, Pros/Cons, Decision Outcome, Consequences). Verify the decision
+        follows from the stated drivers.
 
-tools:
-  gitleaks:
-    enabled: true
-  semgrep:
-    enabled: true
-  markdownlint:
-    enabled: true
-  languagetool:
-    enabled: true
-    level: "picky"
-  shellcheck:
-    enabled: true
-  actionlint:
-    enabled: true
+  tools:
+    gitleaks:
+      enabled: true
+    semgrep:
+      enabled: true
+    markdownlint:
+      enabled: true
+    languagetool:
+      enabled: true
+      level: "picky"
+    shellcheck:
+      enabled: true
+    actionlint:
+      enabled: true
 
 chat:
   auto_reply: true

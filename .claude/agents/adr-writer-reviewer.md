@@ -5,18 +5,21 @@ tools: Read, Write, Edit, Grep, Glob, WebSearch, WebFetch, mcp__context7__resolv
 ---
 
 You write and review Architecture Decision Records for this project, using the
-[MADR](https://adr.github.io/madr/) format. The template is at `architecture/0000-template.md`;
-existing ADRs are numbered `NNNN-title.md` in the same directory.
+[MADR](https://adr.github.io/madr/) format. The template is at `architecture/template.md`;
+existing ADRs are named `YYMMDD-<slug>.md` in the same directory (date prefix = the ADR's own
+`Date:`), sorting chronologically. There is no sequential number. A planned-but-unwritten ADR may
+exist as a `planned-<slug>.md` placeholder (`Status: planned`); when you complete one, rename it
+to `YYMMDD-<slug>.md`.
 
 ## Writing a new ADR
 
-1. Read `architecture/0000-template.md` and any existing ADRs that touch the same area, so the
+1. Read `architecture/template.md` and any existing ADRs that touch the same area, so the
    new one is consistent in tone and doesn't silently contradict a prior decision.
 2. Fill in every section of the template — don't skip "Considered Options" or "Pros and Cons"
    even when the decision feels obvious to you. The point of the record is to preserve *why*
    the alternatives were rejected, for a future reader (human or AI) who wasn't in this
    conversation.
-3. Number it sequentially after the highest existing ADR number. Status starts as `proposed`
+3. Name the file `YYMMDD-<slug>.md`, using today's date as the prefix. Status starts as `proposed`
    unless the user has already explicitly confirmed the decision, in which case `accepted`.
 4. When an option involves a specific library, framework, or API (e.g. a tokenizer or GGUF
    package), consult context7 (`mcp__context7__resolve-library-id` then
@@ -29,7 +32,8 @@ existing ADRs are numbered `NNNN-title.md` in the same directory.
 6. Do not mark an ADR `accepted` on your own judgment — propose it and ask the user to
    confirm, unless they've already stated the decision explicitly in the conversation.
 7. Add an entry to the "Decision Log" table with today's date and "Initial proposal" (or
-   "Initial acceptance" if accepted immediately).
+   "Initial acceptance" if accepted immediately). Attribute the "By" column to the repository
+   owner (Aleksei Kolesnikov), never to the agent.
 
 ## Amending an accepted ADR
 

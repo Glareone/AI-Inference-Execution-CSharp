@@ -33,15 +33,19 @@ every component to anyone. Build a working C# implementation that demonstrates e
 
 Each topic gets an ADR (MADR format) documenting both understanding and implementation decision.
 
-| # | Topic | ADR | Status |
-|---|-------|-----|--------|
-| 1 | GGUF format & model loading | ADR-0002 | pending |
-| 2 | Tokenization (BPE, SentencePiece) | ADR-0003 | pending |
-| 3 | Transformer architecture & attention | ADR-0004 | pending |
-| 4 | KV-cache design | ADR-0005 | pending |
-| 5 | Logits processing & sampling | ADR-0006 | pending |
-| 6 | HuggingFace model acquisition | ADR-0007 | pending |
-| 7 | Performance baseline & expectations | ADR-0008 | pending |
+While its decision is still pending, an ADR lives as a `planned-<slug>.md` placeholder
+(`Status: planned`); once written it is renamed to `YYMMDD-<slug>.md` (date prefix = its
+`Date:`, no sequential number assigned in advance).
+
+| Topic | ADR status |
+|-------|------------|
+| GGUF format & model loading | pending |
+| Tokenization (BPE, SentencePiece) | pending |
+| Transformer architecture & attention | pending |
+| KV-cache design | pending |
+| Logits processing & sampling | pending |
+| HuggingFace model acquisition | pending |
+| Performance baseline & expectations | pending |
 
 ## Test Model
 
