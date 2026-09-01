@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 language: "en-US"
 tone_instructions: "Be direct and technical. Focus on correctness, performance, and adherence to project conventions."
 early_access: false
