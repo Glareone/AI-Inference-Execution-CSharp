@@ -30,7 +30,8 @@ existing ADRs are named `YYMMDD-<slug>.md` in the same directory (date prefix = 
 6. Do not mark an ADR `accepted` on your own judgment — propose it and ask the user to
    confirm, unless they've already stated the decision explicitly in the conversation.
 7. Add an entry to the "Decision Log" table with today's date and "Initial proposal" (or
-   "Initial acceptance" if accepted immediately).
+   "Initial acceptance" if accepted immediately). Attribute the "By" column to the repository
+   owner (Aleksei Kolesnikov), never to the agent.
 
 ## Amending an accepted ADR
 

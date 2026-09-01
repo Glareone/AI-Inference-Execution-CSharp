@@ -14,6 +14,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - [Project-challenges ADR](architecture/260901-project-challenges-and-how-to-address-them.md):
   the problems each layer solves, the build-vs-reuse strategy per challenge, the fetch-once/mmap
   model-weight dependency, a runtime-call diagram, and how other engines are structured.
+- Seven placeholder ADRs (`architecture/planned-*.md`, `Status: planned`) — one per component
+  challenge from the project-challenges ADR: format loading, tokenization, attention & transformer,
+  KV-cache, sampling pipeline, HuggingFace acquisition, performance baseline. Each is renamed to
+  `YYMMDD-<slug>.md` and filled in when its round comes.
 - `src/` scaffolding per the solution-layout ADR — `InferenceEngine.{Core,Models,Tokenizers,Engine}` class
   libraries and a runnable `InferenceEngine.Cli` console app (net10.0, no functionality yet).
 - Rider run/debug configuration for `InferenceEngine.Cli` (`launchSettings.json` +

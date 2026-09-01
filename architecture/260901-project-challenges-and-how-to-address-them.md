@@ -28,14 +28,18 @@ each drill into one of these; this one is the shared, high-level map they hang o
 
 ## Decision Drivers
 
-- **Educational clarity first.** The point is to *understand* each piece well enough to explain
-  it — so anything essential to that understanding (the generation loop, attention, sampling,
-  KV-cache) we build ourselves; anything that's mechanical plumbing (byte-level format parsing,
-  BPE merge tables, low-level BLAS) we reuse.
-- **Reuse libraries over reimplementing** math/tokenization/model-parsing kernels (AGENTS.md).
-- **No custom SIMD/CUDA** kernels unless a specific learning goal demands it, and only with
-  explicit sign-off (AGENTS.md `unsafe` policy).
-- **Benchmarked against dotLLM**, which sets a realistic bar for a pure-.NET engine.
+- **Effort vs. understanding — the governing principle.** For each challenge, weigh the *effort
+  to build it ourselves correctly* against *how much building it (rather than reading about it)
+  actually teaches us about inference*. Build where the payoff is high; reuse where the effort is
+  high or the work is pure plumbing. The decision below is derived from this weighing, not
+  assumed.
+- **Educational clarity** — the code we do own should read as an explanation of inference, not
+  as a wrapper call.
+- **Managed-first, no custom SIMD/CUDA** without explicit sign-off. This is consistent with
+  AGENTS.md, but here it *falls out of* the effort/payoff weighing rather than being taken as a
+  given (see the kernel rows below).
+- **Benchmarked against dotLLM**, which sets a realistic bar for what a pure-.NET engine costs
+  in effort and buys in speed.
 
 ## Considered Options
 
@@ -49,25 +53,45 @@ each drill into one of these; this one is the shared, high-level map they hang o
 
 ## Decision Outcome
 
-Chosen option: **Option B**. Option A hides exactly the internals we're here to learn (the
-generative loop, attention, sampling all live inside the native library). Option C is a much
-larger project than "understand how it works" warrants and pulls us into writing and tuning
-kernels — explicitly out of scope per AGENTS.md. Option B keeps the mechanical plumbing off our
-plate while leaving every *conceptually interesting* piece as our own readable C#.
+Chosen option: **Option B**, reached by weighing each challenge's build effort against its
+understanding payoff (table below) — not by rule. The two extremes lose on that trade: **Option
+A** reuses away the high-payoff pieces, so it costs almost no build effort but teaches API usage
+instead of inference; **Option C** spends its *extra* effort over B almost entirely on the pieces
+with the lowest incremental payoff *for us* — kernel micro-optimization — which is a project in
+itself. Option B sits on the efficient frontier: build where the payoff is high and the effort
+is manageable, reuse where the effort is high or the work is pure plumbing.
 
-Concretely, each challenge maps to an owning project and a build-vs-reuse stance. Each row gets
-its own future ADR:
+#### Effort vs. understanding, per challenge
+
+"Build effort" is the cost of writing it ourselves *correctly*; "payoff" is how much building it,
+rather than reading about it, actually teaches us about how inference works.
+
+| Challenge | Build effort | Payoff of building | Verdict |
+|-----------|--------------|--------------------|---------|
+| Format parsing (GGUF/SafeTensors bytes) | Medium — fiddly binary, endianness, quant block layouts | Low — the layout is learned from the spec; the reader itself is toil | **Reuse** |
+| Tokenization (BPE merges + pre-tokenizer) | Medium–High — pre-tokenizer regex, merge ranking, many edge cases | Low–Medium — the concept is simple; the effort is correctness, not insight | **Reuse** |
+| Model acquisition / download | Low–Medium | Low — it's HTTP plus a cache | **Reuse** |
+| Low-level math (GEMM/GEMV, dequant) | High — SIMD, cache tiling, quant-aware kernels | Medium — we care about the dataflow and memory movement, not squeezing AVX-512 | **Reuse** (math lib) |
+| Forward pass / attention wiring | Medium — compose matmuls into RMSNorm/RoPE/GQA/SwiGLU | **High** — this *is* the transformer | **Build** |
+| KV-cache | Low–Medium — start contiguous | **High** — explains why decode is O(1) per token | **Build** |
+| Sampling / logits | Low | **High** — temperature/top-k/top-p is core and cheap to build | **Build** |
+| Orchestration / generation loop | Low–Medium | **High** — how the pieces become a token stream | **Build** |
+| Serving (HTTP API) | Medium | Low — not an inference internal | **Defer** |
+| CUDA kernels | Very High | Low for a CPU-first learning project | **Skip** |
+
+The build-vs-reuse column below restates those verdicts as concrete project assignments; each
+row gets its own future ADR:
 
 | Challenge | Approach | Owning project | Follow-up ADR |
 |-----------|----------|----------------|---------------|
-| Model acquisition | Reuse: download once from HuggingFace into a local cache, reuse across runs | `Cli` / `Models` | HuggingFace acquisition |
-| Model loading | Reuse a parsing library; mmap the weight blob (no copy) | `Models` | Format loading |
-| Tokenization | Reuse a tokenizer library (BPE/SPM) | `Tokenizers` | Tokenization |
-| Transformer forward pass / attention | **Build** on top of a math library (no custom kernels) | `Models` (+ `Core` types) | Attention & transformer |
-| KV-cache | **Build** — start simple (contiguous), understand before optimizing | `Engine` | KV-cache |
-| Sampling / logits | **Build** — composable temp/top-k/top-p chain | `Engine` | Sampling pipeline |
+| Model acquisition | Reuse: download once from HuggingFace into a local cache, reuse across runs | `Cli` / `Models` | [HuggingFace acquisition](planned-huggingface-acquisition.md) |
+| Model loading | Reuse a parsing library; mmap the weight blob (no copy) | `Models` | [Format loading](planned-format-loading.md) |
+| Tokenization | Reuse a tokenizer library (BPE/SPM) | `Tokenizers` | [Tokenization](planned-tokenization.md) |
+| Transformer forward pass / attention | **Build** on top of a math library (no custom kernels) | `Models` (+ `Core` types) | [Attention & transformer](planned-attention-and-transformer.md) |
+| KV-cache | **Build** — start simple (contiguous), understand before optimizing | `Engine` | [KV-cache](planned-kv-cache.md) |
+| Sampling / logits | **Build** — composable temp/top-k/top-p chain | `Engine` | [Sampling pipeline](planned-sampling-pipeline.md) |
 | Orchestration / generation loop | **Build** — the facade + streamed decode loop | `Engine` | (covered by structure + this ADR) |
-| Performance | Measure against dotLLM; managed-first, `unsafe` only with sign-off | cross-cutting | Performance baseline |
+| Performance | Measure against dotLLM; managed-first, `unsafe` only with sign-off | cross-cutting | [Performance baseline](planned-performance-baseline.md) |
 | Serving | Deferred until the generate loop works | (future `Server`) | (future) |
 
 ### Model acquisition: what we fetch and where it lives
@@ -148,15 +172,17 @@ sequenceDiagram
 
 ### Consequences
 
-- Good, because every conceptually interesting piece (loading semantics, attention, KV-cache,
+Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
+
+- 🟢 every conceptually interesting piece (loading semantics, attention, KV-cache,
   sampling, the loop) is our own readable C# — which is the whole point.
-- Good, because we skip the two things that are pure toil and easy to get subtly wrong: byte-level
+- 🟢 we skip the two things that are pure toil and easy to get subtly wrong: byte-level
   format parsing and the tokenizer merge machinery.
-- Good, because it sets a clear rule for future ADRs: "does this help us understand inference?"
+- 🟢 it sets a clear rule for future ADRs: "does this help us understand inference?"
   decides build vs. reuse, rather than case-by-case debate.
-- Bad, because building the forward pass on a general math library (not tuned kernels) will be
+- 🟡 building the forward pass on a general math library (not tuned kernels) will be
   slower than dotLLM/llama.cpp — accepted; we measure the gap rather than close it.
-- Bad, because "reuse the mechanical parts" still leaves a real amount to build (Engine is not
+- 🟡 "reuse the mechanical parts" still leaves a real amount to build (Engine is not
   small). Accepted — that's where the learning is.
 
 ## Pros and Cons of the Options
@@ -167,27 +193,30 @@ sources.
 
 ### Option A — Wrap a native runtime
 
-- Good, because it's the fastest path to a working, *fast* engine — LLamaSharp (binds llama.cpp)
-  and ONNX Runtime GenAI (wraps ONNX Runtime) are mature and performant.
-- Bad, because the internals we want to learn live *inside* the native library — wrapping it
-  teaches API usage, not how inference works. Directly defeats the project's purpose.
+- 🟢 it's the least build effort *and* the fastest, most robust result — LLamaSharp
+  (binds llama.cpp) and ONNX Runtime GenAI (wraps ONNX Runtime) are mature and performant.
+- 🔴 that near-zero effort buys near-zero understanding: the high-payoff pieces
+  (forward pass, attention, KV-cache, sampling) all execute *inside* the native library, so we'd
+  learn its API, not inference. It optimizes the one thing we're not here to minimize.
 
 ### Option B — Reuse the mechanical parts, build the rest (chosen)
 
-- Good, because it draws the line exactly at the learning goal: reuse parsing/tokenizer/math,
+- 🟢 it draws the line exactly at the learning goal: reuse parsing/tokenizer/math,
   build loop/attention/KV-cache/sampling.
-- Good, because it matches a realistic module count — comparable to Jlama's ~6 real modules,
+- 🟢 it matches a realistic module count — comparable to Jlama's ~6 real modules,
   far lighter than dotLLM's ~17 or LLamaSharp's deployment-target sprawl.
-- Bad, because performance will trail the ground-up SIMD engines; we accept and measure it.
+- 🟡 performance will trail the ground-up SIMD engines; we accept and measure it.
 
 ### Option C — Ground-up everything, including kernels
 
-- Good, because it's the most complete understanding — dotLLM (custom SIMD + CUDA) and the Java
-  engines (Jlama, llama3.java, both hand-rolling Vector-API kernels) show it's achievable in a
-  managed runtime.
-- Bad, because writing and tuning kernels is a project in itself and contradicts AGENTS.md's
-  reuse-over-reimplement and `unsafe`-only-when-justified rules. Out of scope for "understand
-  how it works."
+- 🟢 it has the highest understanding ceiling — dotLLM (custom SIMD + CUDA) and the
+  Java engines (Jlama, llama3.java, both hand-rolling Vector-API kernels) show it's achievable in
+  a managed runtime.
+- 🔴 on the effort/payoff trade: everything Option C adds over Option B is high-effort,
+  low-incremental-payoff kernel work (SIMD tiling, quant-aware GEMV, optional CUDA). We already
+  get the transformer's *dataflow* from building the forward pass on a math library in Option B;
+  hand-writing the multiply underneath it mostly teaches performance engineering, a different
+  subject. High cost for marginal conceptual gain — which is also why AGENTS.md defaults to reuse.
 
 ## More Information
 
@@ -204,6 +233,6 @@ sources.
 
 ## Decision Log
 
-| Date       | Change            | By              |
-|------------|-------------------|-----------------|
-| 2026-09-01 | Initial proposal  | Claude (agent)  |
+| Date       | Change            | By                 |
+|------------|-------------------|--------------------|
+| 2026-09-01 | Initial proposal  | Aleksei Kolesnikov |

@@ -106,17 +106,19 @@ flowchart TB
 
 ### Consequences
 
-- Good, because the project boundaries map directly onto the concepts we're trying to
+Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
+
+- 🟢 the project boundaries map directly onto the concepts we're trying to
   understand (loading vs. tokenizing vs. orchestrating), which is the point of the exercise.
-- Good, because `Cli` gives an early, runnable end-to-end target instead of a pile of
+- 🟢 `Cli` gives an early, runnable end-to-end target instead of a pile of
   libraries with nothing wiring them together.
-- Good, because routing all loading through the `Engine` facade (rather than letting `Cli`
+- 🟢 routing all loading through the `Engine` facade (rather than letting `Cli`
   reference `Models`/`Tokenizers`) keeps `Engine` reusable by a future server or test harness
   without dragging in console concerns.
-- Bad, because if we later *do* want a custom CPU/CUDA kernel experiment or a server, we'll
+- 🟡 if we later *do* want a custom CPU/CUDA kernel experiment or a server, we'll
   add those projects then — this ADR doesn't pre-approve that; it'll need its own decision
   when it has real content.
-- Bad, because five projects for essentially no code yet is more ceremony than Option A. We
+- 🟡 five projects for essentially no code yet is more ceremony than Option A. We
   accept this because the separation is deliberate and we'd have to introduce it very soon
   anyway once real content lands in each layer.
 
@@ -124,20 +126,20 @@ flowchart TB
 
 ### Option A: Single console project
 
-- Good, because zero ceremony, fastest to start writing code.
-- Bad, because it actively works against the learning goal — no visible boundary between
+- 🟢 zero ceremony, fastest to start writing code.
+- 🔴 it actively works against the learning goal — no visible boundary between
   "this is model loading" and "this is sampling logic" as the code grows.
 
 ### Option B: Scoped-down layered libraries (chosen)
 
-- Good, because it mirrors dotLLM's architecture (our reference) at a scope matching our
+- 🟢 it mirrors dotLLM's architecture (our reference) at a scope matching our
   actual goals.
-- Bad, because it's more upfront structure than we have code to fill, today.
+- 🟡 it's more upfront structure than we have code to fill, today.
 
 ### Option C: Full dotLLM-style layering (~17 projects)
 
-- Good, because it's a complete match to the reference architecture, nothing to add later.
-- Bad, because `Cpu`/`Cuda` custom kernels directly contradict the "reuse libraries, don't
+- 🟢 it's a complete match to the reference architecture, nothing to add later.
+- 🔴 `Cpu`/`Cuda` custom kernels directly contradict the "reuse libraries, don't
   hand-roll math kernels" goal from AGENTS.md; `Server`/`HuggingFace`/`Diagnostics`/`Telemetry`
   have no content until the core loop works. Building empty shells for all of these is exactly
   the kind of speculative scaffolding our working-style rules say to avoid.
@@ -155,5 +157,5 @@ flowchart TB
 
 | Date       | Change            | By              |
 |------------|-------------------|-----------------|
-| 2026-08-11 | Initial proposal  | Claude (agent)  |
-| 2026-09-01 | Renamed to the `YYMMDD-<slug>` convention; corrected dotLLM project count (10 → ~17); added a project-reference diagram and a "which project is responsible for what" table; moved the engineering challenges, external-dependency flow, and reference-project comparison out to the new challenges ADR (260901) | Claude (agent) |
+| 2026-08-11 | Initial proposal  | Aleksei Kolesnikov  |
+| 2026-09-01 | Renamed to the `YYMMDD-<slug>` convention; corrected dotLLM project count (10 → ~17); added a project-reference diagram and a "which project is responsible for what" table; moved the engineering challenges, external-dependency flow, and reference-project comparison out to the new challenges ADR (260901) | Aleksei Kolesnikov |

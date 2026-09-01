@@ -28,20 +28,23 @@ best trade-off given the drivers above].
 
 ### Consequences
 
-- Good, because [positive consequence]
-- Bad, because [negative consequence / accepted trade-off]
+Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
+
+- 🟢 [positive consequence]
+- 🟡 [accepted trade-off]
+- 🔴 [downside]
 
 ## Pros and Cons of the Options
 
 ### Option A
 
-- Good, because [argument]
-- Bad, because [argument]
+- 🟢 [upside]
+- 🔴 [downside]
 
 ### Option B
 
-- Good, because [argument]
-- Bad, because [argument]
+- 🟢 [upside]
+- 🔴 [downside]
 
 ## More Information
 
