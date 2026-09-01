@@ -35,15 +35,15 @@ Each topic gets an ADR (MADR format) documenting both understanding and implemen
 
 Each pending ADR is named `YYMMDD-<slug>.md` when it's written (no number assigned in advance).
 
-| # | Topic | ADR status |
-|---|-------|------------|
-| 1 | GGUF format & model loading | pending |
-| 2 | Tokenization (BPE, SentencePiece) | pending |
-| 3 | Transformer architecture & attention | pending |
-| 4 | KV-cache design | pending |
-| 5 | Logits processing & sampling | pending |
-| 6 | HuggingFace model acquisition | pending |
-| 7 | Performance baseline & expectations | pending |
+| Topic | ADR status |
+|-------|------------|
+| GGUF format & model loading | pending |
+| Tokenization (BPE, SentencePiece) | pending |
+| Transformer architecture & attention | pending |
+| KV-cache design | pending |
+| Logits processing & sampling | pending |
+| HuggingFace model acquisition | pending |
+| Performance baseline & expectations | pending |
 
 ## Test Model
 

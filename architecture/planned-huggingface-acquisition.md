@@ -5,7 +5,7 @@
 
 > **Planned ADR — not yet written.** Placeholder for the *Model acquisition* row of
 > [260901-project-challenges-and-how-to-address-them.md](260901-project-challenges-and-how-to-address-them.md).
-> **Owning project:** `Cli` / `Models`. **Stance:** Reuse — download once from HuggingFace into a
+> **Owning project:** `Cli` (hands `Models` a local path). **Stance:** Reuse — download once from HuggingFace into a
 > local cache, reuse across runs. Open questions this ADR settles: which download library, the
 > cache directory layout, and resume/verification behavior.
 > On completion, rename to `YYMMDD-huggingface-acquisition.md` and set Status to `proposed`.

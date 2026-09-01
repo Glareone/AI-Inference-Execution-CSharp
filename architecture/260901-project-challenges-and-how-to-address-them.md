@@ -61,7 +61,7 @@ with the lowest incremental payoff *for us* — kernel micro-optimization — wh
 itself. Option B sits on the efficient frontier: build where the payoff is high and the effort
 is manageable, reuse where the effort is high or the work is pure plumbing.
 
-#### Effort vs. understanding, per challenge
+### Effort vs. understanding, per challenge
 
 "Build effort" is the cost of writing it ourselves *correctly*; "payoff" is how much building it,
 rather than reading about it, actually teaches us about how inference works.
@@ -84,7 +84,7 @@ row gets its own future ADR:
 
 | Challenge | Approach | Owning project | Follow-up ADR |
 |-----------|----------|----------------|---------------|
-| Model acquisition | Reuse: download once from HuggingFace into a local cache, reuse across runs | `Cli` / `Models` | [HuggingFace acquisition](planned-huggingface-acquisition.md) |
+| Model acquisition | Reuse: download once from HuggingFace into a local cache, reuse across runs | `Cli` (hands `Models` a local path) | [HuggingFace acquisition](planned-huggingface-acquisition.md) |
 | Model loading | Reuse a parsing library; mmap the weight blob (no copy) | `Models` | [Format loading](planned-format-loading.md) |
 | Tokenization | Reuse a tokenizer library (BPE/SPM) | `Tokenizers` | [Tokenization](planned-tokenization.md) |
 | Transformer forward pass / attention | **Build** on top of a math library (no custom kernels) | `Models` (+ `Core` types) | [Attention & transformer](planned-attention-and-transformer.md) |
