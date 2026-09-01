@@ -38,7 +38,8 @@ cases (e.g. a tensor buffer on a proven hot path). Before writing `unsafe` code:
 
 Non-trivial design decisions (tokenizer library choice, GGUF loading strategy, tensor memory
 model, KV-cache design, etc.) get an ADR in [architecture/](architecture/), using the
-[MADR](https://adr.github.io/madr/) format (template at `architecture/0000-template.md`). Write
+[MADR](https://adr.github.io/madr/) format (template at `architecture/template.md`; ADR files
+are named `YYMMDD-<slug>.md`). Write
 or review these with the `adr-writer-reviewer` agent if using Claude Code (see
 [.claude/agents/](.claude/agents/)); otherwise just follow the template directly.
 

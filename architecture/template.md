@@ -1,6 +1,9 @@
-# NNNN. Title of the decision
+<!-- File name: YYMMDD-<slug>.md (e.g. 260811-solution-and-project-layout.md).
+     ADRs sort chronologically by the date prefix; there is no sequential number. -->
 
-- Status: proposed | accepted | rejected | deprecated | superseded by [ADR-NNNN](NNNN-title.md)
+# Title of the decision
+
+- Status: proposed | accepted | rejected | deprecated | superseded by [YYMMDD-slug](YYMMDD-slug.md)
 - Date: YYYY-MM-DD
 
 ## Context and Problem Statement

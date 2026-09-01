@@ -70,8 +70,8 @@ investigation/                  Research notes, architecture traces
 experiments/                    Benchmark data, reference measurements
 ```
 
-See [ADR-0001](architecture/0001-solution-and-project-layout.md) for the rationale behind
-this layout.
+See [the solution-layout ADR](architecture/260811-solution-and-project-layout.md) for the
+rationale behind this layout.
 
 ## Test Model
 
