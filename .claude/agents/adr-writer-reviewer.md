@@ -7,7 +7,9 @@ tools: Read, Write, Edit, Grep, Glob, WebSearch, WebFetch, mcp__context7__resolv
 You write and review Architecture Decision Records for this project, using the
 [MADR](https://adr.github.io/madr/) format. The template is at `architecture/template.md`;
 existing ADRs are named `YYMMDD-<slug>.md` in the same directory (date prefix = the ADR's own
-`Date:`), sorting chronologically. There is no sequential number.
+`Date:`), sorting chronologically. There is no sequential number. A planned-but-unwritten ADR may
+exist as a `planned-<slug>.md` placeholder (`Status: planned`); when you complete one, rename it
+to `YYMMDD-<slug>.md`.
 
 ## Writing a new ADR
 

@@ -34,6 +34,8 @@ reviews:
     - "!.vs/**"
     - "!.idea/**"
     - "!**/*.DotSettings"
+    # planned-*.md are intentional ADR placeholders (Status: planned); skip until dated/renamed
+    - "!architecture/planned-*.md"
 
   path_instructions:
     - path: "**/*.cs"
@@ -57,12 +59,6 @@ reviews:
         YYMMDD-<slug>.md). Check that all sections are filled (Context, Decision Drivers,
         Considered Options, Pros/Cons, Decision Outcome, Consequences). Verify the decision
         follows from the stated drivers.
-    - path: "architecture/planned-*.md"
-      instructions: |
-        These are intentional PLACEHOLDER ADRs (Status: planned) for decisions not yet made.
-        Do NOT flag them for missing or empty MADR sections — the `_TBD_` bodies are expected.
-        Each is filled in and renamed to YYMMDD-<slug>.md once its decision is ready. Only
-        review the header note and the "Where this problem is isolated" section for accuracy.
 
   tools:
     gitleaks:

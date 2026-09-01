@@ -39,7 +39,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `experiments/` directory with benchmark data:
   - `reference-measurements-dotllm.md` — dotLLM v0.1.0-preview.3 baseline: 53.9 tok/s decode
     on SmolLM2-135M Q4_K_M, GGUF metadata dump, tensor quantization analysis
-- README.md expanded with investigation topics, references, project structure, agent descriptions
+- README.md expanded with investigation topics, references, project structure, agent descriptions.
 
 ### Changed
 

@@ -56,9 +56,9 @@ each drill into one of these; this one is the shared, high-level map they hang o
 Chosen option: **Option B**, reached by weighing each challenge's build effort against its
 understanding payoff (table below) — not by rule. The two extremes lose on that trade: **Option
 A** reuses away the high-payoff pieces, so it costs almost no build effort but teaches API usage
-instead of inference; **Option C** spends its *extra* effort over B almost entirely on the pieces
-with the lowest incremental payoff *for us* — kernel micro-optimization — which is a project in
-itself. Option B sits on the efficient frontier: build where the payoff is high and the effort
+instead of inference; **Option C** spends its *extra* effort over B building the format parser,
+the tokenizer, *and* the low-level kernels — and the kernel work in particular is the highest
+effort for the lowest incremental payoff *for us*; together that's a project in itself. Option B sits on the efficient frontier: build where the payoff is high and the effort
 is manageable, reuse where the effort is high or the work is pure plumbing.
 
 ### Effort vs. understanding, per challenge
@@ -212,8 +212,9 @@ sources.
 - 🟢 it has the highest understanding ceiling — dotLLM (custom SIMD + CUDA) and the
   Java engines (Jlama, llama3.java, both hand-rolling Vector-API kernels) show it's achievable in
   a managed runtime.
-- 🔴 on the effort/payoff trade: everything Option C adds over Option B is high-effort,
-  low-incremental-payoff kernel work (SIMD tiling, quant-aware GEMV, optional CUDA). We already
+- 🔴 on the effort/payoff trade: over Option B, Option C adds format-parser, tokenizer, *and*
+  low-level kernel work (SIMD tiling, quant-aware GEMV, optional CUDA) — the kernel piece being
+  the costly one for the least incremental payoff. We already
   get the transformer's *dataflow* from building the forward pass on a math library in Option B;
   hand-writing the multiply underneath it mostly teaches performance engineering, a different
   subject. High cost for marginal conceptual gain — which is also why AGENTS.md defaults to reuse.

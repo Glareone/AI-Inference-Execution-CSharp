@@ -74,8 +74,8 @@ below them. Each entry states what it **owns** and who it **calls**:
   `Tokenizers` — all loading is funneled through the `Engine` facade). Executable
   (`OutputType=Exe`).
 
-Solution file `InferenceEngine.sln` at the repo root, with solution folders matching the
-project names above, `src/<ProjectName>/<ProjectName>.csproj` on disk. A root
+Solution file `InferenceEngine.sln` at the repo root, with a single `src` solution folder
+containing all five projects, each at `src/<ProjectName>/<ProjectName>.csproj` on disk. A root
 `Directory.Build.props` sets shared settings (nullable enable, implicit usings enable,
 current C# language version) so individual `.csproj` files stay minimal.
 

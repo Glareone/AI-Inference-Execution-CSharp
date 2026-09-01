@@ -33,7 +33,9 @@ every component to anyone. Build a working C# implementation that demonstrates e
 
 Each topic gets an ADR (MADR format) documenting both understanding and implementation decision.
 
-Each pending ADR is named `YYMMDD-<slug>.md` when it's written (no number assigned in advance).
+While its decision is still pending, an ADR lives as a `planned-<slug>.md` placeholder
+(`Status: planned`); once written it is renamed to `YYMMDD-<slug>.md` (date prefix = its
+`Date:`, no sequential number assigned in advance).
 
 | Topic | ADR status |
 |-------|------------|
