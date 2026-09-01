@@ -51,11 +51,18 @@ reviews:
         from the solution-layout ADR (architecture/260811-solution-and-project-layout.md):
         Core has no deps; Models/Tokenizers reference Core; Engine references
         Core+Models+Tokenizers; Cli references Engine.
-    - path: "architecture/**/*.md"
+    - path: "architecture/[0-9]*-*.md"
       instructions: |
-        These are Architecture Decision Records in MADR format. Check that all sections
-        are filled (Context, Decision Drivers, Considered Options, Pros/Cons, Decision
-        Outcome, Consequences). Verify the decision follows from the stated drivers.
+        These are finalized Architecture Decision Records in MADR format (filename
+        YYMMDD-<slug>.md). Check that all sections are filled (Context, Decision Drivers,
+        Considered Options, Pros/Cons, Decision Outcome, Consequences). Verify the decision
+        follows from the stated drivers.
+    - path: "architecture/planned-*.md"
+      instructions: |
+        These are intentional PLACEHOLDER ADRs (Status: planned) for decisions not yet made.
+        Do NOT flag them for missing or empty MADR sections — the `_TBD_` bodies are expected.
+        Each is filled in and renamed to YYMMDD-<slug>.md once its decision is ready. Only
+        review the header note and the "Where this problem is isolated" section for accuracy.
 
   tools:
     gitleaks:

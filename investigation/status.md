@@ -24,14 +24,25 @@
 
 ## What's next
 
-1. **GGUF model loading ADR** — write ADR based on investigation findings.
-   Research agents still running (GGUF format spec, HuggingFace ecosystem).
-2. **Tokenization ADR** — pick a tokenizer library. Research pending.
-3. **Attention & transformer ADR** — document understanding, decide approach.
-4. **KV-cache ADR** — simple vs paged, implementation decision.
-5. **Sampling pipeline ADR** — composable sampler chain design.
-6. **HuggingFace model acquisition ADR** — download strategy.
-7. **Performance baseline ADR** — targets, managed vs unsafe, SIMD.
+Seven placeholder ADRs now exist (`Status: planned`), one per component challenge from the
+[project-challenges ADR](../architecture/260901-project-challenges-and-how-to-address-them.md).
+Each carries its owning project and build-vs-reuse stance; the MADR body is filled in — and the
+file renamed to `YYMMDD-<slug>.md` — when its round comes.
+
+1. **[Model format loading](../architecture/planned-format-loading.md)** — placeholder created;
+   to fill: GGUF vs. SafeTensors and the parsing library. (Format research done — see below.)
+2. **[Tokenization](../architecture/planned-tokenization.md)** — placeholder created; to fill:
+   tokenizer library choice and pre-tokenizer sourcing. (Ecosystem research done — see below.)
+3. **[Attention & transformer](../architecture/planned-attention-and-transformer.md)** —
+   placeholder created; to fill: forward-pass approach on a math library.
+4. **[KV-cache](../architecture/planned-kv-cache.md)** — placeholder created; to fill: simple
+   vs. paged design.
+5. **[Sampling pipeline](../architecture/planned-sampling-pipeline.md)** — placeholder created;
+   to fill: composable sampler chain design.
+6. **[HuggingFace model acquisition](../architecture/planned-huggingface-acquisition.md)** —
+   placeholder created; to fill: download library, cache layout, resume/verify behavior.
+7. **[Performance baseline](../architecture/planned-performance-baseline.md)** — placeholder
+   created; to fill: tokens/s targets, managed vs. `unsafe`, SIMD.
 8. **Core abstractions** — define `IModel`, `ITokenizer`, tensor/config types in
    `InferenceEngine.Core` once ADR decisions inform the interfaces.
 9. **Generation loop** — implement sampling and KV-cache in `InferenceEngine.Engine`,
@@ -44,4 +55,7 @@
 |----------|--------|
 | `investigation/overview.md` | done |
 | `investigation/dotllm-architecture-trace.md` | done |
+| `investigation/gguf-format-research.md` | done |
+| `investigation/huggingface-ecosystem.md` | done |
+| `investigation/inference-engine-project-layouts.md` | done |
 | `experiments/reference-measurements-dotllm.md` | done |
