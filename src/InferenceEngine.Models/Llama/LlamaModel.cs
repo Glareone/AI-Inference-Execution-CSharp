@@ -70,6 +70,8 @@ public sealed class LlamaModel : IModel
         var hiddenSize = (int)gguf.Metadata.GetU32("llama.embedding_length");
         var numHeads = (int)gguf.Metadata.GetU32("llama.attention.head_count");
 
+        // Fallbacks below match llama.cpp/HF conventions for the llama architecture, used only
+        // when a GGUF file omits a key that's normally present — not this POC's own defaults.
         var config = new ModelConfig(
             Architecture: architecture,
             VocabSize: (int)gguf.Metadata.GetU32("llama.vocab_size"),
@@ -87,6 +89,7 @@ public sealed class LlamaModel : IModel
         return new LlamaModel(config, weights);
     }
 
+    /// <inheritdoc/>
     public ReadOnlySpan<float> Forward(int tokenId, int position, IKvCache kvCache, bool needLogits)
     {
         if (position < 0 || position >= Config.MaxSeqLen)

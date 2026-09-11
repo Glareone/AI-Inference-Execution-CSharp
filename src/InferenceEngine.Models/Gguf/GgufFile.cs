@@ -95,6 +95,8 @@ internal sealed class GgufFile : IDisposable
         }
         catch
         {
+            // Parsing failed partway through — GgufFile's own Dispose() never gets called since
+            // the constructor never returns, so the mmap handle must be released here instead.
             mmf.Dispose();
             throw;
         }

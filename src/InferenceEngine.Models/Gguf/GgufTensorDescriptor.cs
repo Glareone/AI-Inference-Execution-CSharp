@@ -6,5 +6,7 @@ namespace InferenceEngine.Models.Gguf;
 /// </summary>
 internal sealed record GgufTensorDescriptor(string Name, long[] Dims, GgmlType Type, long Offset)
 {
+    // checked: dims come straight from the file, so a malformed one must overflow loudly here
+    // rather than silently wrap into a smaller, plausible-but-wrong element count.
     public long ElementCount => Dims.Aggregate(1L, (acc, d) => checked(acc * d));
 }

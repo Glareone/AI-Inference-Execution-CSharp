@@ -23,7 +23,9 @@ public interface ITokenizer
 
     int BosTokenId { get; }
 
+    /// <summary>The id that ends a generation turn — the generation loop stops when a sampled id equals this.</summary>
     int EosTokenId { get; }
 
+    /// <summary>Looks up a special/control token (e.g. a chat-template marker) by its literal text, without running it through BPE.</summary>
     bool TryGetId(string token, out int id);
 }

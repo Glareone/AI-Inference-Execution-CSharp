@@ -150,6 +150,18 @@ consistency check, and the `PrefillTopLogits` sequence-length guard. Re-verified
 against the real model after the `Rope` refactor and the new `GgufFile` bounds checks — output
 and load time are unchanged. Clean build (0 warnings/errors, Debug + Release, wiped `bin`/`obj`).
 
+CodeRabbit's Docstring Coverage pre-merge check (80% threshold) flagged 70 touched functions
+across 24 files — a generic platform default this repo never opted into, and one that pulls
+against the comment policy already declared in `.coderabbit.yaml` ("no WHAT comments, only
+WHY"). Rather than pad functions with restated-behavior summaries to hit a number, added
+`<inheritdoc/>` on the handful of public methods implementing an already-documented interface
+member (`LlamaModel.Forward`, and `GgufBpeTokenizer`'s `DecodeToken`/`GetTokenBytes`/
+`EosTokenId`/`TryGetId`) plus two contract-level docs on `ITokenizer.EosTokenId`/`TryGetId` that
+were genuinely missing, and three inline WHY comments for non-obvious behavior (`GgufFile.Open`'s
+dispose-on-parse-failure, `GgufTensorDescriptor.ElementCount`'s `checked` overflow guard,
+`LlamaModel.LoadFromGguf`'s config fallback defaults). The threshold itself is unaddressed by
+design — it doesn't fit this project's documented style.
+
 ### Changed
 
 - Moved `architecture/`, `investigation/`, and `scenarios/` under a new `docs/` folder

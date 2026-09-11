@@ -38,6 +38,7 @@ public sealed class GgufBpeTokenizer : ITokenizer
 
     public int BosTokenId { get; }
 
+    /// <inheritdoc/>
     public int EosTokenId { get; }
 
     private GgufBpeTokenizer(TokenizerData data)
@@ -112,8 +113,10 @@ public sealed class GgufBpeTokenizer : ITokenizer
         return Encoding.UTF8.GetString(bytes.ToArray());
     }
 
+    /// <inheritdoc/>
     public string DecodeToken(int id) => Encoding.UTF8.GetString(GetTokenBytes(id));
 
+    /// <inheritdoc/>
     public byte[] GetTokenBytes(int id)
     {
         var token = _idToToken[id];
@@ -126,6 +129,7 @@ public sealed class GgufBpeTokenizer : ITokenizer
         return bytes;
     }
 
+    /// <inheritdoc/>
     public bool TryGetId(string token, out int id) => _tokenToId.TryGetValue(token, out id);
 
     /// <summary>
