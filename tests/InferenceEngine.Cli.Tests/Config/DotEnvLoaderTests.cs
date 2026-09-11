@@ -90,6 +90,28 @@ public class DotEnvLoaderTests
     }
 
     [Fact]
+    public void Load_IgnoresLineWithEmptyKey_InsteadOfAbortingTheWholeFile()
+    {
+        // A line like "=value" has an empty key. Environment.GetEnvironmentVariable/
+        // SetEnvironmentVariable both reject an empty name, so without a guard this would throw
+        // partway through File.ReadLines and abort every entry after it too, not just this line.
+        var key = UniqueKey();
+        var path = WriteTempEnvFile(["=orphaned-value", $"{key}=value"]);
+
+        try
+        {
+            var exception = Record.Exception(() => DotEnvLoader.Load(path));
+
+            Assert.Null(exception);
+            Assert.Equal("value", Environment.GetEnvironmentVariable(key));
+        }
+        finally
+        {
+            Cleanup(path, key);
+        }
+    }
+
+    [Fact]
     public void Load_WithMissingFile_DoesNothingAndDoesNotThrow()
     {
         var missingPath = Path.Combine(Path.GetTempPath(), $"does-not-exist-{Guid.NewGuid():N}.env");

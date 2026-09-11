@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace InferenceEngine.Cli.Config;
 
 /// <summary>
@@ -96,7 +98,7 @@ internal sealed record CliOptions(
     {
         var flag = args[i];
         var value = NextValue(args, ref i);
-        if (!int.TryParse(value, out var result))
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result))
         {
             throw new ArgumentException($"'{flag}' expects an integer, got '{value}'.");
         }
@@ -108,7 +110,7 @@ internal sealed record CliOptions(
     {
         var flag = args[i];
         var value = NextValue(args, ref i);
-        if (!float.TryParse(value, out var result))
+        if (!float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
         {
             throw new ArgumentException($"'{flag}' expects a number, got '{value}'.");
         }
@@ -123,7 +125,7 @@ internal sealed record CliOptions(
             return null;
         }
 
-        if (!int.TryParse(value, out var result))
+        if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var result))
         {
             throw new ArgumentException($"{name} expects an integer, got '{value}'.");
         }
@@ -138,7 +140,7 @@ internal sealed record CliOptions(
             return null;
         }
 
-        if (!float.TryParse(value, out var result))
+        if (!float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var result))
         {
             throw new ArgumentException($"{name} expects a number, got '{value}'.");
         }

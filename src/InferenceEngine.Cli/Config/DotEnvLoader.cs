@@ -29,6 +29,13 @@ internal static class DotEnvLoader
             }
 
             var key = trimmed[..separatorIndex].Trim();
+            if (key.Length == 0)
+            {
+                // e.g. a line starting with "=" — Environment.GetEnvironmentVariable/SetEnvironmentVariable
+                // both reject an empty name, so this would otherwise throw and abort the whole load.
+                continue;
+            }
+
             var value = trimmed[(separatorIndex + 1)..].Trim().Trim('"');
 
             // Don't override a value already set in the real environment.

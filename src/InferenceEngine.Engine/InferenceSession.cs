@@ -110,14 +110,17 @@ public sealed class InferenceSession
             throw new ArgumentException("The prompt encoded to zero tokens; nothing to generate from.", nameof(prompt));
         }
 
-        var sequenceLength = promptIds.Count + options.MaxNewTokens;
-        if (sequenceLength > Config.MaxSeqLen)
+        // Compared via subtraction, not promptIds.Count + options.MaxNewTokens > Config.MaxSeqLen —
+        // that addition can overflow for a large MaxNewTokens (e.g. int.MaxValue) and wrap past
+        // the check instead of failing it.
+        if (options.MaxNewTokens > Config.MaxSeqLen - promptIds.Count)
         {
             throw new ArgumentException(
-                $"Requested sequence length {sequenceLength} exceeds the model's max context ({Config.MaxSeqLen}).");
+                $"Requested sequence length ({promptIds.Count} prompt + {options.MaxNewTokens} new) " +
+                $"exceeds the model's max context ({Config.MaxSeqLen}).");
         }
 
-        return GenerateCore(promptIds, sequenceLength, options);
+        return GenerateCore(promptIds, promptIds.Count + options.MaxNewTokens, options);
     }
 
     private IEnumerable<GeneratedToken> GenerateCore(IReadOnlyList<int> promptIds, int sequenceLength, GenerationOptions options)
@@ -142,6 +145,14 @@ public sealed class InferenceSession
             }
 
             yield return new GeneratedToken(nextId, decoder.DecodeNext(_tokenizer.GetTokenBytes(nextId)));
+
+            if (step == options.MaxNewTokens - 1)
+            {
+                // No further sampling step will run, so no step would ever read the logits (or
+                // the cache write) a forward pass here would produce — skip the most expensive
+                // op in the loop instead of computing and discarding it.
+                yield break;
+            }
 
             logits = _model.Forward(nextId, position, kv, needLogits: true);
             position++;

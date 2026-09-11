@@ -14,10 +14,9 @@ public interface ITokenizer
     string DecodeToken(int id);
 
     /// <summary>
-    /// Raw UTF-8 bytes for a single token id, before any decoding — a token may represent only
-    /// part of a multi-byte character. For a caller that must accumulate bytes across several
-    /// tokens (e.g. streaming generation) before decoding, so a character split across two
-    /// tokens doesn't decode to a replacement character for each half.
+    /// Raw UTF-8 bytes for a token, before decoding — a token can be only part of a multi-byte
+    /// character, so a caller accumulating bytes across tokens (streaming) avoids a replacement
+    /// character at the split point.
     /// </summary>
     byte[] GetTokenBytes(int id);
 

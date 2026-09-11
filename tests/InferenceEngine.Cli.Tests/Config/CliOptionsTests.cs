@@ -132,6 +132,26 @@ public class CliOptionsTests : IDisposable
     }
 
     [Fact]
+    public void Load_TemperatureWithPeriodDecimalSeparator_Parses()
+    {
+        var options = CliOptions.Load(["--model", "m.gguf", "--temperature", "0.7"], loadDotEnv: false);
+
+        Assert.Equal(0.7f, options.Temperature);
+    }
+
+    [Fact]
+    public void Load_TemperatureWithCommaDecimalSeparator_IsRejectedNotSilentlyMisparsed()
+    {
+        // Numeric parsing is pinned to invariant culture (period decimal separator) regardless
+        // of the process's current culture, so a comma-decimal value is invalid input — not
+        // something that happens to parse differently depending on the machine's locale.
+        var ex = Assert.Throws<ArgumentException>(() =>
+            CliOptions.Load(["--model", "m.gguf", "--temperature", "0,7"], loadDotEnv: false));
+
+        Assert.Contains("--temperature", ex.Message);
+    }
+
+    [Fact]
     public void Load_WithLoadDotEnvFalse_NeverTouchesTheFilesystem()
     {
         // Regression guard for the test seam itself: a .env file sitting in the current directory

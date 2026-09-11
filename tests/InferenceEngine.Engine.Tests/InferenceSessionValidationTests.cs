@@ -82,6 +82,42 @@ public class InferenceSessionValidationTests
     }
 
     [Fact]
+    public void Generate_MaxNewTokensNearIntMax_ThrowsWithoutIntegerOverflow()
+    {
+        // promptIds.Count + int.MaxValue would overflow a naive addition-based bound check and
+        // could wrap past the limit instead of failing it — asserting the exception type (rather
+        // than just "it throws") catches a regression back to that unchecked comparison.
+        var session = CreateSession(maxSeqLen: 10);
+
+        var exception = Record.Exception(() => session.Generate("hi", new GenerationOptions(MaxNewTokens: int.MaxValue)));
+
+        Assert.IsType<ArgumentException>(exception);
+    }
+
+    [Fact]
+    public void Generate_AtMaxNewTokens_DoesNotRunAWastedFinalForwardPass()
+    {
+        // The step that yields the MaxNewTokens-th token is also the last step: no further
+        // sampling will ever read a forward pass run after it, so Generate must not run one.
+        var config = new ModelConfig(
+            Architecture: "llama", VocabSize: 8, HiddenSize: 4, NumLayers: 1,
+            NumAttentionHeads: 1, NumKvHeads: 1, HeadDim: 4, FfnHiddenSize: 4,
+            MaxSeqLen: 2048, RmsNormEps: 1e-5f, RopeFreqBase: 10000f);
+
+        // Token id 5 is neither 0 (FakeTokenizer's hardcoded EosTokenId) nor out of the 8-slot
+        // vocab, so sampling reaches the "yield a real token" path instead of stopping at EOS.
+        var model = new FakeModel(config, preferredTokenId: 5);
+        var tokenizer = new FakeTokenizer(new Dictionary<string, int> { ["<|im_start|>"] = 1, ["<|im_end|>"] = 2 });
+        var session = new InferenceSession(model, tokenizer, new ChatMlTemplate("system prompt"));
+        var promptTokenCount = session.Tokenize("hi", raw: false).Count;
+
+        var generated = session.Generate("hi", new GenerationOptions(MaxNewTokens: 1)).ToList();
+
+        Assert.Single(generated);
+        Assert.Equal(promptTokenCount, model.ForwardCallCount); // prefill only — no forward pass for the step that never samples again
+    }
+
+    [Fact]
     public void PrefillTopLogits_PromptLongerThanMaxContext_ThrowsBeforeCacheAllocation()
     {
         // Without this check, LlamaModel.Forward's fixed-size scratch buffers (sized to

@@ -73,8 +73,13 @@ try
 
     return 0;
 }
-catch (ArgumentException ex)
+catch (Exception ex) when (ex is ArgumentException or InvalidDataException or NotSupportedException)
 {
+    // Covers CliOptions/Generate validation (ArgumentException), a malformed GGUF file or a
+    // model/tokenizer vocab-size mismatch (InvalidDataException), and an unsupported GGUF
+    // version/architecture/tokenizer/pre-tokenizer (NotSupportedException) — every exception
+    // type InferenceSession.Load and Generate are documented to throw for bad input, so all of
+    // them get a clean one-line message instead of an unhandled-exception stack trace.
     output.Error(ex.Message);
     return 1;
 }

@@ -2,7 +2,6 @@ using System.Diagnostics;
 
 namespace InferenceEngine.Cli.Diagnostics;
 
-/// <summary>Measures an action's wall-clock time without scattering <see cref="Stopwatch"/> start/stop calls at each call site.</summary>
 internal static class Timed
 {
     public static (T Result, TimeSpan Elapsed) Run<T>(Func<T> action)

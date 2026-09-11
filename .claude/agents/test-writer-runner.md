@@ -4,6 +4,8 @@ description: Use this agent to write, update, or run tests for any InferenceEngi
 tools: Read, Write, Edit, Bash, Grep, Glob, mcp__context7__resolve-library-id, mcp__context7__query-docs
 ---
 
+# Test Writer Runner
+
 You write and run tests for this project. Read AGENTS.md first if you haven't — small reviewable
 steps, no speculative abstractions, no `unsafe` without the sign-off process all apply to test
 code too.
@@ -54,7 +56,7 @@ under the existing `tests` solution folder with `dotnet sln add`.
 Run tests with `dotnet test` (whole solution) or `dotnet test path/to/Project.Tests.csproj`
 (one project while iterating). Collect coverage with:
 
-```
+```shell
 dotnet test --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
 ```
 

@@ -162,6 +162,43 @@ dispose-on-parse-failure, `GgufTensorDescriptor.ElementCount`'s `checked` overfl
 `LlamaModel.LoadFromGguf`'s config fallback defaults). The threshold itself is unaddressed by
 design — it doesn't fit this project's documented style.
 
+Third round of CodeRabbit review findings:
+
+- `CliOptions`: numeric flags/env vars (`--temperature`, `--top-p`, etc.) now parse with
+  `CultureInfo.InvariantCulture` instead of the current culture — on a comma-decimal locale,
+  `float.TryParse` without it can silently misparse or reject valid values like `0.7`.
+- `DotEnvLoader`: a line with an empty key (e.g. a stray `=value`) is now skipped instead of
+  calling `Environment.GetEnvironmentVariable`/`SetEnvironmentVariable` with an empty name, which
+  throws `ArgumentException` and — since it happens inside the `.env` line loop — previously
+  aborted every entry after it in the same file, not just the bad line.
+- `Program.cs`'s error handling now catches `InvalidDataException` and `NotSupportedException`
+  alongside `ArgumentException`. `InferenceSession.Load` can throw either (a malformed GGUF file,
+  a model/tokenizer vocab-size mismatch, or an unsupported GGUF version/architecture/tokenizer/
+  pre-tokenizer) but only `ArgumentException` was caught, so these reported as unhandled-exception
+  stack traces instead of a clean one-line error.
+- `InferenceSession.Generate`'s context-length check now compares via subtraction
+  (`options.MaxNewTokens > Config.MaxSeqLen - promptIds.Count`) instead of addition
+  (`promptIds.Count + options.MaxNewTokens > Config.MaxSeqLen`) — the addition can overflow for
+  a large `MaxNewTokens` (e.g. `int.MaxValue`) and wrap past the check instead of failing it.
+- `InferenceSession.GenerateCore` no longer runs a forward pass after yielding the very last
+  token of a `MaxNewTokens`-bounded generation — that pass's logits and KV-cache write were
+  never read by anything, since the loop exits right after. Skips the most expensive op in the
+  loop for every token-limit completion (not needed for the EOS-triggered stop, which already
+  exited before reaching it).
+- Markdown lint fixes on `.claude/agents/test-writer-runner.md` (MD041 top-level heading after
+  front matter, MD040 language on the coverage-command fence).
+- Trimmed a handful of XML/inline comments that restated behavior instead of explaining
+  non-obvious rationale (`ITokenizer.GetTokenBytes`, `IChatPromptStep`, `Timed`, `ConsoleOutput`,
+  the `FakeModel` test double) — same "WHY not WHAT" policy as the previous round.
+
+5 new tests (76 total, all passing): invariant-culture rejection of a comma-decimal value, the
+empty-`.env`-key line no longer aborting the file, the overflow-safe context-length check
+(`MaxNewTokens: int.MaxValue`), and a `FakeModel.ForwardCallCount` assertion proving the final
+forward pass is actually skipped. Re-verified end-to-end: normal generation output unchanged, a
+non-GGUF file now reports a clean error instead of a stack trace, and a comma-decimal
+`--temperature` is cleanly rejected. Clean build (0 warnings/errors, Debug + Release, wiped
+`bin`/`obj`).
+
 ### Changed
 
 - Moved `architecture/`, `investigation/`, and `scenarios/` under a new `docs/` folder
