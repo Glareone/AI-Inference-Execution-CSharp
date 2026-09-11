@@ -215,6 +215,91 @@ public class GgufFileTests
         }
     }
 
+    [Fact]
+    public void ImplausibleMetadataKvCount_ThrowsInvalidDataException()
+    {
+        // A count larger than the file itself can never be valid — reject it before attempting
+        // to allocate a dictionary/array sized to it (a small malformed file could otherwise
+        // trigger an excessive allocation).
+        var path = WriteRawFile(writer =>
+        {
+            writer.Write(0UL);        // tensor_count
+            writer.Write(1_000_000UL); // metadata_kv_count — wildly exceeds this tiny file
+        });
+
+        try
+        {
+            Assert.Throws<InvalidDataException>(() => GgufFile.Open(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void ImplausibleTensorDimensionCount_ThrowsInvalidDataExceptionNamingTheTensor()
+    {
+        var path = WriteRawFile(writer =>
+        {
+            writer.Write(1UL); // tensor_count
+            writer.Write(0UL); // metadata_kv_count
+            writer.Write(1UL); // tensor name length
+            writer.Write((byte)'w');
+            writer.Write(1_000_000u); // implausible dimension count for this tiny file
+        });
+
+        try
+        {
+            var ex = Assert.Throws<InvalidDataException>(() => GgufFile.Open(path));
+            Assert.Contains("w", ex.Message);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void TruncatedStringValue_ThrowsEndOfStreamException_InsteadOfSilentlyReturningAShortString()
+    {
+        // The declared length (10) is well within this file's total size, so the coarse
+        // "count can't exceed the file" guard doesn't catch it — only actually running out of
+        // bytes mid-read does. BinaryReader.ReadBytes would silently return a truncated 5-byte
+        // result instead; the fix reads via Stream.ReadExactly, which throws instead.
+        var path = WriteRawFile(writer =>
+        {
+            writer.Write(0UL); // tensor_count
+            writer.Write(1UL); // metadata_kv_count
+            writer.Write(1UL); // key length
+            writer.Write((byte)'k');
+            writer.Write((uint)GgufValueType.String);
+            writer.Write(10UL);        // claims a 10-byte string value...
+            writer.Write(new byte[5]); // ...but only 5 bytes actually follow before EOF
+        });
+
+        try
+        {
+            Assert.Throws<EndOfStreamException>(() => GgufFile.Open(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>Writes just the GGUF magic/version header, then whatever the caller supplies, to a temp file.</summary>
+    private static string WriteRawFile(Action<BinaryWriter> writeBody)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"gguf-raw-test-{Guid.NewGuid():N}.gguf");
+        using var stream = new FileStream(path, FileMode.Create, FileAccess.Write);
+        using var writer = new BinaryWriter(stream);
+        writer.Write(0x46554747u); // "GGUF"
+        writer.Write(3u);          // version
+        writeBody(writer);
+        return path;
+    }
+
     private static byte[] FloatBytes(float[] values)
     {
         var bytes = new byte[values.Length * sizeof(float)];

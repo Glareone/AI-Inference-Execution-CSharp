@@ -14,7 +14,7 @@ namespace InferenceEngine.Tokenizers.Tests;
 public class GgufBpeTokenizerTests
 {
     private static TokenizerData MakeData(string[] tokens, string[] merges, string preTokenizerName = "smollm") =>
-        new(tokens, merges, BosTokenId: 0, EosTokenId: 0, UnknownTokenId: 0, preTokenizerName);
+        new(tokens, merges, BosTokenId: 0, EosTokenId: 0, preTokenizerName);
 
     [Fact]
     public void Encode_ThenDecode_ReturnsOriginalText()
@@ -85,5 +85,17 @@ public class GgufBpeTokenizerTests
         var data = MakeData(tokens: ["a"], merges: [], preTokenizerName: "some-unimplemented-variant");
 
         Assert.Throws<NotSupportedException>(() => GgufBpeTokenizer.Create(data));
+    }
+
+    [Fact]
+    public void Create_WithMalformedMergeEntry_ThrowsInvalidDataExceptionNamingTheEntry()
+    {
+        // A merge entry is expected to be "left right" (single space). One with no space at all
+        // (or more than two space-separated parts) is a malformed/corrupted GGUF file, not a
+        // case that should surface as an unexplained IndexOutOfRangeException from Split.
+        var data = MakeData(tokens: ["a", "b"], merges: ["ab"]);
+
+        var ex = Assert.Throws<InvalidDataException>(() => GgufBpeTokenizer.Create(data));
+        Assert.Contains("ab", ex.Message);
     }
 }

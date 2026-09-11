@@ -54,8 +54,8 @@ internal sealed class GgufFile : IDisposable
                 throw new NotSupportedException($"GGUF version {version} is not supported (only v{SupportedVersion}).");
             }
 
-            var tensorCount = checked((int)reader.ReadUInt64());
-            var kvCount = checked((int)reader.ReadUInt64());
+            var tensorCount = ReadCount(reader, "tensor_count");
+            var kvCount = ReadCount(reader, "metadata_kv_count");
 
             var rawMetadata = new Dictionary<string, object>(kvCount);
             for (var i = 0; i < kvCount; i++)
@@ -72,6 +72,11 @@ internal sealed class GgufFile : IDisposable
             {
                 var name = ReadGgufString(reader);
                 var nDims = reader.ReadUInt32();
+                if (nDims > (uint)headerStream.Length)
+                {
+                    throw new InvalidDataException($"GGUF tensor '{name}' has an implausible dimension count ({nDims}).");
+                }
+
                 var dims = new long[nDims];
                 for (var d = 0; d < nDims; d++)
                 {
@@ -142,9 +147,27 @@ internal sealed class GgufFile : IDisposable
 
     private static string ReadGgufString(BinaryReader reader)
     {
-        var length = checked((int)reader.ReadUInt64());
-        var bytes = reader.ReadBytes(length);
+        var length = ReadCount(reader, "string length");
+        var bytes = new byte[length];
+        reader.BaseStream.ReadExactly(bytes); // BinaryReader.ReadBytes would silently truncate on a short/corrupt file
         return Encoding.UTF8.GetString(bytes);
+    }
+
+    /// <summary>
+    /// Reads a file-declared count (a string length, array length, or the top-level
+    /// tensor/metadata counts) and rejects one that exceeds the file's own size — such a count
+    /// can never be valid, and letting it through risks an excessive allocation from a small
+    /// malformed or truncated file.
+    /// </summary>
+    private static int ReadCount(BinaryReader reader, string what)
+    {
+        var raw = reader.ReadUInt64();
+        if (raw > (ulong)reader.BaseStream.Length)
+        {
+            throw new InvalidDataException($"GGUF {what} ({raw}) exceeds the file size and cannot be valid.");
+        }
+
+        return checked((int)raw);
     }
 
     private static object ReadValue(BinaryReader reader, GgufValueType type) => type switch
@@ -168,7 +191,7 @@ internal sealed class GgufFile : IDisposable
     private static object ReadArray(BinaryReader reader)
     {
         var elementType = (GgufValueType)reader.ReadUInt32();
-        var count = checked((int)reader.ReadUInt64());
+        var count = ReadCount(reader, "array element count");
 
         if (elementType == GgufValueType.String)
         {

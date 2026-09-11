@@ -6,5 +6,5 @@ namespace InferenceEngine.Models.Gguf;
 /// </summary>
 internal sealed record GgufTensorDescriptor(string Name, long[] Dims, GgmlType Type, long Offset)
 {
-    public long ElementCount => Dims.Aggregate(1L, (acc, d) => acc * d);
+    public long ElementCount => Dims.Aggregate(1L, (acc, d) => checked(acc * d));
 }

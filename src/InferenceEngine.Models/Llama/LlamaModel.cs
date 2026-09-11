@@ -89,6 +89,13 @@ public sealed class LlamaModel : IModel
 
     public ReadOnlySpan<float> Forward(int tokenId, int position, IKvCache kvCache, bool needLogits)
     {
+        if (position < 0 || position >= Config.MaxSeqLen)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(position), position,
+                $"Position must be within [0, {Config.MaxSeqLen}) — the attention scratch buffers are sized to MaxSeqLen.");
+        }
+
         var hiddenSize = Config.HiddenSize;
         var groupSize = Config.NumAttentionHeads / Config.NumKvHeads;
 

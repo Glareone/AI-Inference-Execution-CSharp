@@ -2,7 +2,6 @@ using System.Buffers;
 
 namespace InferenceEngine.Engine.Sampling;
 
-/// <summary>Keeps only the <c>k</c> highest logits, setting the rest to <see cref="float.NegativeInfinity"/>.</summary>
 internal sealed class TopKStep(int k) : ISamplerStep
 {
     public void Apply(Span<float> logits)

@@ -115,6 +115,41 @@ CodeRabbit review findings on the POC PR:
   `GetTokenBytes`) through a new `IncrementalUtf8Decoder`, which buffers an incomplete character
   across calls the way `System.Text.Decoder` is designed to.
 
+Second round of CodeRabbit review findings:
+
+- `GgufFile`: a file-declared count (metadata KV count, tensor count, tensor dimension count,
+  string length, array length) exceeding the file's own size now throws `InvalidDataException`
+  before any allocation sized to it — a small malformed or truncated file could otherwise trigger
+  an excessive allocation. Separately, reading a metadata string now uses `Stream.ReadExactly`
+  instead of `BinaryReader.ReadBytes`, which silently returns a shorter-than-requested array on a
+  truncated file instead of throwing.
+- `GgufTensorDescriptor.ElementCount`: the dimension-count multiplication is now `checked`, so
+  dimensions that would overflow `long` throw `OverflowException` instead of silently wrapping to
+  a smaller, incorrect (but plausible-looking) tensor size.
+- `GgufBpeTokenizer`: a merge-list entry that isn't a space-separated pair now throws a clear
+  `InvalidDataException` naming the entry, instead of `IndexOutOfRangeException` from `Split`.
+- `InferenceSession.Load` now validates that the model's vocab size (`llama.vocab_size`) matches
+  the tokenizer's vocabulary length (`tokenizer.ggml.tokens`) — both are read independently from
+  the same GGUF file, and if they disagree, a sampled id could be out of range for the tokenizer.
+  Caught at load time with a clear cause instead of an obscure exception mid-generation.
+- `LlamaModel.Forward` now rejects a `position` outside `[0, MaxSeqLen)` — its attention scratch
+  buffers are sized to `MaxSeqLen` — and `InferenceSession.PrefillTopLogits` (the `--debug-logits`
+  path, which had no such guard) now rejects a prompt longer than `MaxSeqLen` before allocating
+  the KV-cache, matching the guard already added to `Generate`.
+- `TokenizerData.UnknownTokenId`: removed — read from GGUF metadata but never consumed anywhere.
+- `Ops.Rope`: the per-pair rotation angle (`cos`/`sin`) depended only on position and pair index,
+  not on which head was being rotated, but was recomputed (`MathF.Pow`/`Cos`/`Sin`) once per head
+  per pair. Now computed once per pair and reused across all heads — fewer redundant transcendental
+  calls on the decode hot path, same result.
+- Removed several XML doc comments across the sampling types that restated what the code already
+  says (pure "what", no non-obvious "why"), per this project's comment policy.
+
+10 new tests across Models/Tokenizers/Engine (71 total, all passing): implausible GGUF counts,
+truncated-string reads, tensor dimension overflow, a malformed merge entry, the vocab-size
+consistency check, and the `PrefillTopLogits` sequence-length guard. Re-verified end-to-end
+against the real model after the `Rope` refactor and the new `GgufFile` bounds checks — output
+and load time are unchanged. Clean build (0 warnings/errors, Debug + Release, wiped `bin`/`obj`).
+
 ### Changed
 
 - ADR file naming convention switched from sequential `NNNN-title.md` to `YYMMDD-<slug>.md`

@@ -57,8 +57,8 @@ public class ValueSemanticsTests
     {
         var tokens = new[] { "<s>", "a", "b" };
         var merges = new[] { "a b" };
-        var a = new TokenizerData(tokens, merges, 0, 0, 0, "smollm");
-        var b = new TokenizerData(tokens, merges, 0, 0, 0, "smollm");
+        var a = new TokenizerData(tokens, merges, 0, 0, "smollm");
+        var b = new TokenizerData(tokens, merges, 0, 0, "smollm");
 
         Assert.Equal(a, b);
     }
@@ -78,8 +78,8 @@ public class ValueSemanticsTests
     [Fact]
     public void TokenizerData_WithEqualButDistinctArrayInstances_AreNotEqual()
     {
-        var a = new TokenizerData(["<s>", "a", "b"], ["a b"], 0, 0, 0, "smollm");
-        var b = new TokenizerData(["<s>", "a", "b"], ["a b"], 0, 0, 0, "smollm");
+        var a = new TokenizerData(["<s>", "a", "b"], ["a b"], 0, 0, "smollm");
+        var b = new TokenizerData(["<s>", "a", "b"], ["a b"], 0, 0, "smollm");
 
         Assert.NotEqual(a, b);
     }

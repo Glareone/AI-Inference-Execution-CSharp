@@ -80,4 +80,50 @@ public class InferenceSessionValidationTests
 
         Assert.Null(exception);
     }
+
+    [Fact]
+    public void PrefillTopLogits_PromptLongerThanMaxContext_ThrowsBeforeCacheAllocation()
+    {
+        // Without this check, LlamaModel.Forward's fixed-size scratch buffers (sized to
+        // MaxSeqLen) would be exceeded mid-prefill, throwing an unattributed exception far from
+        // the actual cause (an over-long prompt).
+        var session = CreateSession(maxSeqLen: 2);
+
+        var exception = Record.Exception(() => session.PrefillTopLogits([1, 2, 3, 4], topN: 5));
+
+        Assert.IsType<ArgumentException>(exception);
+    }
+
+    [Fact]
+    public void PrefillTopLogits_PromptWithinMaxContext_DoesNotThrow()
+    {
+        var session = CreateSession(maxSeqLen: 10);
+
+        var exception = Record.Exception(() => session.PrefillTopLogits([1, 2, 3], topN: 5));
+
+        Assert.Null(exception);
+    }
+
+    /// <summary>
+    /// Business case: the model's vocab size (<c>llama.vocab_size</c>) and the tokenizer's
+    /// vocabulary (<c>tokenizer.ggml.tokens</c> length) are read independently from the same
+    /// GGUF file. If a malformed or mismatched file has them disagree, a sampled token id could
+    /// be out of range for the tokenizer — this must be caught at load time with a clear cause,
+    /// not as an obscure IndexOutOfRangeException mid-generation.
+    /// </summary>
+    [Fact]
+    public void ValidateVocabSizesMatch_MismatchedSizes_ThrowsInvalidDataException()
+    {
+        var exception = Record.Exception(() => InferenceSession.ValidateVocabSizesMatch(modelVocabSize: 8, tokenizerVocabCount: 7));
+
+        Assert.IsType<InvalidDataException>(exception);
+    }
+
+    [Fact]
+    public void ValidateVocabSizesMatch_MatchingSizes_DoesNotThrow()
+    {
+        var exception = Record.Exception(() => InferenceSession.ValidateVocabSizesMatch(modelVocabSize: 8, tokenizerVocabCount: 8));
+
+        Assert.Null(exception);
+    }
 }

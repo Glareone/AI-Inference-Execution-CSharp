@@ -2,10 +2,6 @@ using System.Buffers;
 
 namespace InferenceEngine.Engine.Sampling;
 
-/// <summary>
-/// Nucleus sampling: keeps the smallest set of highest-probability logits whose cumulative
-/// probability reaches <c>p</c>, setting the rest to <see cref="float.NegativeInfinity"/>.
-/// </summary>
 internal sealed class TopPStep(float p) : ISamplerStep
 {
     public void Apply(Span<float> logits)

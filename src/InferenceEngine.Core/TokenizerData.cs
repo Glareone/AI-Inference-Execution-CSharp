@@ -14,5 +14,4 @@ public sealed record TokenizerData(
     string[] Merges,
     int BosTokenId,
     int EosTokenId,
-    int UnknownTokenId,
     string PreTokenizerName);

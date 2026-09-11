@@ -1,3 +1,4 @@
+using System.IO;
 using InferenceEngine.Core;
 using InferenceEngine.Engine.Config;
 using InferenceEngine.Engine.Prompting;
@@ -38,9 +39,28 @@ public sealed class InferenceSession
     {
         var model = LlamaModel.LoadFromGguf(modelPath);
         var tokenizerData = GgufTokenizerReader.Read(modelPath);
+        ValidateVocabSizesMatch(model.Config.VocabSize, tokenizerData.Tokens.Length);
+
         var tokenizer = GgufBpeTokenizer.Create(tokenizerData);
         var chatTemplate = new ChatMlTemplate(ChatMlTemplate.DefaultSystemPrompt);
         return new InferenceSession(model, tokenizer, chatTemplate);
+    }
+
+    /// <summary>
+    /// The model's vocab size (<c>llama.vocab_size</c>) and the tokenizer's vocabulary
+    /// (<c>tokenizer.ggml.tokens</c>) are read independently from the same GGUF file. If they
+    /// disagree, a sampled token id could be out of range for the tokenizer's vocabulary —
+    /// caught here, at load time, with a clear cause, instead of an obscure exception mid-generation.
+    /// </summary>
+    internal static void ValidateVocabSizesMatch(int modelVocabSize, int tokenizerVocabCount)
+    {
+        if (modelVocabSize != tokenizerVocabCount)
+        {
+            throw new InvalidDataException(
+                $"Model vocab size ({modelVocabSize}) does not match the tokenizer vocabulary " +
+                $"({tokenizerVocabCount} tokens) — the GGUF file's llama.vocab_size and " +
+                "tokenizer.ggml.tokens metadata disagree.");
+        }
     }
 
     /// <summary>Token ids for <paramref name="prompt"/> — ChatML-wrapped unless <paramref name="raw"/>. For <c>--debug-tokenize</c>.</summary>
@@ -52,6 +72,12 @@ public sealed class InferenceSession
     /// <summary>Runs prefill only and returns the top-<paramref name="topN"/> next-token logits. For <c>--debug-logits</c>.</summary>
     public (int Id, string Text, float Logit)[] PrefillTopLogits(IReadOnlyList<int> promptIds, int topN)
     {
+        if (promptIds.Count > Config.MaxSeqLen)
+        {
+            throw new ArgumentException(
+                $"Prompt length {promptIds.Count} exceeds the model's max context ({Config.MaxSeqLen}).", nameof(promptIds));
+        }
+
         var kv = new SimpleKvCache(Config.NumLayers, promptIds.Count, Config.NumKvHeads * Config.HeadDim);
         var logits = default(ReadOnlySpan<float>);
         for (var i = 0; i < promptIds.Count; i++)

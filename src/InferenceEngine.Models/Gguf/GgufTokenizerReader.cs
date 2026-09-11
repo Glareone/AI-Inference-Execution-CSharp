@@ -28,7 +28,6 @@ public static class GgufTokenizerReader
             Merges: gguf.Metadata.GetStringArray("tokenizer.ggml.merges"),
             BosTokenId: (int)gguf.Metadata.GetU32("tokenizer.ggml.bos_token_id"),
             EosTokenId: (int)gguf.Metadata.GetU32("tokenizer.ggml.eos_token_id"),
-            UnknownTokenId: (int)gguf.Metadata.GetU32OrDefault("tokenizer.ggml.unknown_token_id", 0),
             PreTokenizerName: gguf.Metadata.GetStringOrDefault("tokenizer.ggml.pre") ?? "default");
     }
 }

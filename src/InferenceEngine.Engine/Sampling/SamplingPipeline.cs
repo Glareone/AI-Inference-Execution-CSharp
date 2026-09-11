@@ -2,10 +2,6 @@ using InferenceEngine.Engine.Config;
 
 namespace InferenceEngine.Engine.Sampling;
 
-/// <summary>
-/// The composable temperature -> top-k -> top-p chain from the sampling-pipeline ADR, with a
-/// greedy short-circuit for <see cref="GenerationOptions.Temperature"/> &lt;= 0.
-/// </summary>
 internal sealed class SamplingPipeline
 {
     private readonly List<ISamplerStep> _steps = [];

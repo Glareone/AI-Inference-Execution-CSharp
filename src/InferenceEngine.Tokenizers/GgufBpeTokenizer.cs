@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using InferenceEngine.Core;
@@ -52,6 +53,11 @@ public sealed class GgufBpeTokenizer : ITokenizer
         for (var rank = 0; rank < data.Merges.Length; rank++)
         {
             var parts = data.Merges[rank].Split(' ', 2);
+            if (parts.Length != 2)
+            {
+                throw new InvalidDataException($"GGUF merge entry {rank} ('{data.Merges[rank]}') is not a space-separated pair.");
+            }
+
             _mergeRanks[(parts[0], parts[1])] = rank;
         }
 

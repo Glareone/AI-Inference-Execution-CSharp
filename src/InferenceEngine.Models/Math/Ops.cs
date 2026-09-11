@@ -39,14 +39,26 @@ internal static class Ops
     public static void Rope(Span<float> vec, int numHeads, int headDim, int position, float freqBase)
     {
         var half = headDim / 2;
+
+        // The rotation angle depends only on (position, i, freqBase) — not on the head — so
+        // compute cos/sin once per pair and reuse across every head, instead of recomputing the
+        // same MathF.Pow/Cos/Sin per head on this per-layer, per-token hot path.
+        Span<float> cosCache = half <= 128 ? stackalloc float[half] : new float[half];
+        Span<float> sinCache = half <= 128 ? stackalloc float[half] : new float[half];
+        for (var i = 0; i < half; i++)
+        {
+            var theta = position * MathF.Pow(freqBase, -2f * i / headDim);
+            cosCache[i] = MathF.Cos(theta);
+            sinCache[i] = MathF.Sin(theta);
+        }
+
         for (var h = 0; h < numHeads; h++)
         {
             var baseIndex = h * headDim;
             for (var i = 0; i < half; i++)
             {
-                var theta = position * MathF.Pow(freqBase, -2f * i / headDim);
-                var cos = MathF.Cos(theta);
-                var sin = MathF.Sin(theta);
+                var cos = cosCache[i];
+                var sin = sinCache[i];
                 var i0 = baseIndex + (2 * i);
                 var i1 = i0 + 1;
                 var x0 = vec[i0];
