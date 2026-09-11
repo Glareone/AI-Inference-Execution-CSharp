@@ -106,7 +106,9 @@ public sealed class GgufBpeTokenizer : ITokenizer
         return Encoding.UTF8.GetString(bytes.ToArray());
     }
 
-    public string DecodeToken(int id)
+    public string DecodeToken(int id) => Encoding.UTF8.GetString(GetTokenBytes(id));
+
+    public byte[] GetTokenBytes(int id)
     {
         var token = _idToToken[id];
         var bytes = new byte[token.Length];
@@ -115,7 +117,7 @@ public sealed class GgufBpeTokenizer : ITokenizer
             bytes[i] = ByteLevelAlphabet.CharToByte[token[i]];
         }
 
-        return Encoding.UTF8.GetString(bytes);
+        return bytes;
     }
 
     public bool TryGetId(string token, out int id) => _tokenToId.TryGetValue(token, out id);

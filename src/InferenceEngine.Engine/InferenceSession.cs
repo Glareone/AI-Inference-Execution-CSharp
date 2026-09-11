@@ -22,7 +22,8 @@ public sealed class InferenceSession
     private readonly ITokenizer _tokenizer;
     private readonly ChatMlTemplate _chatTemplate;
 
-    private InferenceSession(IModel model, ITokenizer tokenizer, ChatMlTemplate chatTemplate)
+    /// <remarks>Internal (not private) so tests can construct a session from fakes without a real GGUF file.</remarks>
+    internal InferenceSession(IModel model, ITokenizer tokenizer, ChatMlTemplate chatTemplate)
     {
         _model = model;
         _tokenizer = tokenizer;
@@ -65,11 +66,39 @@ public sealed class InferenceSession
         return indices.Take(topN).Select(i => (i, _tokenizer.DecodeToken(i), logitsCopy[i])).ToArray();
     }
 
+    /// <summary>
+    /// Validates eagerly (before returning) and generates lazily. Splitting these matters: this
+    /// method is not itself an iterator, so a bad <paramref name="options"/> or empty prompt
+    /// throws immediately when called, rather than only once the caller starts enumerating.
+    /// </summary>
     public IEnumerable<GeneratedToken> Generate(string prompt, GenerationOptions options)
     {
+        if (options.MaxNewTokens < 0)
+        {
+            throw new ArgumentException("MaxNewTokens must be >= 0.", nameof(options));
+        }
+
         var promptIds = Tokenize(prompt, options.Raw);
-        var kv = new SimpleKvCache(Config.NumLayers, promptIds.Count + options.MaxNewTokens, Config.NumKvHeads * Config.HeadDim);
+        if (promptIds.Count == 0)
+        {
+            throw new ArgumentException("The prompt encoded to zero tokens; nothing to generate from.", nameof(prompt));
+        }
+
+        var sequenceLength = promptIds.Count + options.MaxNewTokens;
+        if (sequenceLength > Config.MaxSeqLen)
+        {
+            throw new ArgumentException(
+                $"Requested sequence length {sequenceLength} exceeds the model's max context ({Config.MaxSeqLen}).");
+        }
+
+        return GenerateCore(promptIds, sequenceLength, options);
+    }
+
+    private IEnumerable<GeneratedToken> GenerateCore(IReadOnlyList<int> promptIds, int sequenceLength, GenerationOptions options)
+    {
+        var kv = new SimpleKvCache(Config.NumLayers, sequenceLength, Config.NumKvHeads * Config.HeadDim);
         var sampler = new SamplingPipeline(options, Config.VocabSize);
+        var decoder = new IncrementalUtf8Decoder();
 
         var position = 0;
         var logits = default(ReadOnlySpan<float>);
@@ -86,7 +115,7 @@ public sealed class InferenceSession
                 yield break;
             }
 
-            yield return new GeneratedToken(nextId, _tokenizer.DecodeToken(nextId));
+            yield return new GeneratedToken(nextId, decoder.DecodeNext(_tokenizer.GetTokenBytes(nextId)));
 
             logits = _model.Forward(nextId, position, kv, needLogits: true);
             position++;

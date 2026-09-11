@@ -88,6 +88,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   New `test-writer-runner` Claude Code agent (`.claude/agents/`) owns writing and running these
   going forward — one test project per `src/` project, business-case-documented, always run
   before being reported done.
+- `scenarios/`: one Gherkin (`.feature`) file per `src/` project, documenting in plain
+  Given/When/Then form the business scenarios the automated tests and manual CLI verification
+  cover — plain specification files, not wired to a BDD execution framework.
+
+### Fixed
+
+CodeRabbit review findings on the POC PR:
+
+- `CliOptions.Load` no longer throws `IndexOutOfRangeException`/`FormatException` for a flag
+  missing its value or a malformed numeric flag/environment-variable value — both now raise a
+  clear `ArgumentException` naming the offending flag or variable.
+- `Program.cs` now catches `ArgumentException` around model loading and generation, not just
+  around CLI option parsing, so an `InferenceSession.Generate` validation failure (see below)
+  reports a clean one-line error and exit code 1 instead of an unhandled-exception stack trace.
+- `InferenceSession.Generate` now validates `MaxNewTokens >= 0`, a non-empty encoded prompt, and
+  the requested sequence length against `ModelConfig.MaxSeqLen` — and validates *eagerly*, before
+  returning, rather than only once the caller starts enumerating (it was refactored from a single
+  iterator method into a plain validating wrapper around a private iterator, since code before a
+  `yield` in an iterator method doesn't run until the first `MoveNext`). Previously, a negative
+  `--max-tokens` or `--raw` with an empty prompt could throw a confusing exception deep inside
+  `SimpleKvCache`, or silently sample from an empty logits span.
+- Streamed generation could show a UTF-8 replacement character when a single multi-byte
+  character's bytes were split across two generated tokens, because each token was decoded to
+  text independently. `InferenceSession` now feeds each token's raw bytes (`ITokenizer` gained
+  `GetTokenBytes`) through a new `IncrementalUtf8Decoder`, which buffers an incomplete character
+  across calls the way `System.Text.Decoder` is designed to.
 
 ### Changed
 

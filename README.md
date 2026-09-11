@@ -65,6 +65,11 @@ src/
   InferenceEngine.Tokenizers/   Tokenization (BPE, SentencePiece)
   InferenceEngine.Engine/       Generation loop, KV-cache, sampling
   InferenceEngine.Cli/          Console entry point
+tests/
+  InferenceEngine.{Core,Models,Tokenizers,Engine,Cli}.Tests/
+                                 xUnit test project per src/ project (see each README.md)
+scenarios/                      Gherkin (.feature) specs, one per src/ project — the business
+                                 scenarios the tests and manual CLI verification cover
 architecture/                   ADRs in MADR format
 investigation/                  Research notes, architecture traces
 experiments/                    Benchmark data, reference measurements

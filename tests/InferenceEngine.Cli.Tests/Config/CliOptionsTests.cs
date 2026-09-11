@@ -102,6 +102,36 @@ public class CliOptionsTests : IDisposable
     }
 
     [Fact]
+    public void Load_FlagMissingItsValue_ThrowsArgumentExceptionInsteadOfCrashing()
+    {
+        // A trailing flag with nothing after it must be rejected cleanly, not throw
+        // IndexOutOfRangeException from indexing past the end of args.
+        var ex = Assert.Throws<ArgumentException>(() => CliOptions.Load(["--model", "m.gguf", "--max-tokens"], loadDotEnv: false));
+
+        Assert.Contains("--max-tokens", ex.Message);
+    }
+
+    [Fact]
+    public void Load_FlagWithNonNumericValue_ThrowsArgumentExceptionInsteadOfCrashing()
+    {
+        // Bad numeric text must be rejected cleanly, not throw FormatException from int.Parse.
+        var ex = Assert.Throws<ArgumentException>(() =>
+            CliOptions.Load(["--model", "m.gguf", "--max-tokens", "not-a-number"], loadDotEnv: false));
+
+        Assert.Contains("--max-tokens", ex.Message);
+    }
+
+    [Fact]
+    public void Load_EnvironmentVariableWithNonNumericValue_ThrowsArgumentExceptionInsteadOfCrashing()
+    {
+        Environment.SetEnvironmentVariable("INFERENCE_MAX_TOKENS", "not-a-number");
+
+        var ex = Assert.Throws<ArgumentException>(() => CliOptions.Load(["--model", "m.gguf"], loadDotEnv: false));
+
+        Assert.Contains("INFERENCE_MAX_TOKENS", ex.Message);
+    }
+
+    [Fact]
     public void Load_WithLoadDotEnvFalse_NeverTouchesTheFilesystem()
     {
         // Regression guard for the test seam itself: a .env file sitting in the current directory
