@@ -19,7 +19,7 @@ every component is understood deeply enough to explain to anyone.
 6. **HuggingFace integration** — model discovery, downloading, format ecosystem
 7. **Performance** — tokens/second, memory bandwidth vs compute, SIMD in .NET, GC pressure
 
-Each topic is documented as an ADR (Architecture Decision Record) in `architecture/`,
+Each topic is documented as an ADR (Architecture Decision Record) in `docs/architecture/`,
 capturing both what we learned and what we decided for our implementation.
 
 ## References & Inspiration
@@ -68,14 +68,15 @@ src/
 tests/
   InferenceEngine.{Core,Models,Tokenizers,Engine,Cli}.Tests/
                                  xUnit test project per src/ project (see each README.md)
-scenarios/                      Gherkin (.feature) specs, one per src/ project — the business
-                                 scenarios the tests and manual CLI verification cover
-architecture/                   ADRs in MADR format
-investigation/                  Research notes, architecture traces
+docs/
+  scenarios/                   Gherkin (.feature) specs, one per src/ project — the business
+                                scenarios the tests and manual CLI verification cover
+  architecture/                 ADRs in MADR format
+  investigation/                Research notes, architecture traces
 experiments/                    Benchmark data, reference measurements
 ```
 
-See [the solution-layout ADR](architecture/260811-solution-and-project-layout.md) for the
+See [the solution-layout ADR](docs/architecture/260811-solution-and-project-layout.md) for the
 rationale behind this layout.
 
 ## Test Model
@@ -104,7 +105,7 @@ documentation instead of relying on training data.
 
 **Investigation phase** — researching internals before implementation. Solution scaffolding
 exists and builds. dotLLM installed as reference tool. No inference code yet.
-See [investigation/status.md](investigation/status.md) for detailed progress and
+See [docs/investigation/status.md](docs/investigation/status.md) for detailed progress and
 [CHANGELOG.md](CHANGELOG.md) for changes.
 
 ## Project Docs
@@ -112,7 +113,8 @@ See [investigation/status.md](investigation/status.md) for detailed progress and
 - [AGENTS.md](AGENTS.md) — ground rules for any AI coding assistant (stack, `unsafe` policy,
   ADR process)
 - [CLAUDE.md](CLAUDE.md) — Claude Code–specific config (subagents, hooks)
-- [architecture/](architecture/) — architecture decisions in [MADR](https://adr.github.io/madr/) format
-- [investigation/](investigation/) — research notes and architecture traces
+- [docs/architecture/](docs/architecture/) — architecture decisions in [MADR](https://adr.github.io/madr/) format
+- [docs/investigation/](docs/investigation/) — research notes and architecture traces
+- [docs/scenarios/](docs/scenarios/) — Gherkin (`.feature`) business-scenario specs, one per `src/` project
 - [experiments/](experiments/) — benchmark data and reference measurements
 - [CHANGELOG.md](CHANGELOG.md) — notable changes

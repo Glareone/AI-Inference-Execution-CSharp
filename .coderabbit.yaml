@@ -35,7 +35,7 @@ reviews:
     - "!.idea/**"
     - "!**/*.DotSettings"
     # planned-*.md are intentional ADR placeholders (Status: planned); skip until dated/renamed
-    - "!architecture/planned-*.md"
+    - "!docs/architecture/planned-*.md"
 
   path_instructions:
     - path: "**/*.cs"
@@ -50,10 +50,10 @@ reviews:
     - path: "**/*.csproj"
       instructions: |
         Verify: target framework is net10.0, dependencies follow the layered architecture
-        from the solution-layout ADR (architecture/260811-solution-and-project-layout.md):
+        from the solution-layout ADR (docs/architecture/260811-solution-and-project-layout.md):
         Core has no deps; Models/Tokenizers reference Core; Engine references
         Core+Models+Tokenizers; Cli references Engine.
-    - path: "architecture/[0-9]*-*.md"
+    - path: "docs/architecture/[0-9]*-*.md"
       instructions: |
         These are finalized Architecture Decision Records in MADR format (filename
         YYMMDD-<slug>.md). Check that all sections are filled (Context, Decision Drivers,

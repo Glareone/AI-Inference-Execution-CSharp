@@ -10,8 +10,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Project scaffolding: README with project goal and inspiration (dotLLM by Konrad Kokosa),
   AGENTS.md / CLAUDE.md ground rules, ADR template (`architecture/`), and Claude Code
   subagents (`adr-writer-reviewer`, `csharp-dotnet`).
-- [Solution-layout ADR](architecture/260811-solution-and-project-layout.md): solution/project layout.
-- [Project-challenges ADR](architecture/260901-project-challenges-and-how-to-address-them.md):
+- [Solution-layout ADR](docs/architecture/260811-solution-and-project-layout.md): solution/project layout.
+- [Project-challenges ADR](docs/architecture/260901-project-challenges-and-how-to-address-them.md):
   the problems each layer solves, the build-vs-reuse strategy per challenge, the fetch-once/mmap
   model-weight dependency, a runtime-call diagram, and how other engines are structured.
 - Seven placeholder ADRs (`architecture/planned-*.md`, `Status: planned`) — one per component
@@ -88,7 +88,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   New `test-writer-runner` Claude Code agent (`.claude/agents/`) owns writing and running these
   going forward — one test project per `src/` project, business-case-documented, always run
   before being reported done.
-- `scenarios/`: one Gherkin (`.feature`) file per `src/` project, documenting in plain
+- `docs/scenarios/`: one Gherkin (`.feature`) file per `src/` project, documenting in plain
   Given/When/Then form the business scenarios the automated tests and manual CLI verification
   cover — plain specification files, not wired to a BDD execution framework.
 
@@ -152,6 +152,13 @@ and load time are unchanged. Clean build (0 warnings/errors, Debug + Release, wi
 
 ### Changed
 
+- Moved `architecture/`, `investigation/`, and `scenarios/` under a new `docs/` folder
+  (`docs/architecture/`, `docs/investigation/`, `docs/scenarios/`), via `git mv` to preserve
+  history. `experiments/` stays at the repo root (not part of this move). Updated every
+  cross-reference: README, AGENTS.md, CLAUDE.md, CHANGELOG, `.coderabbit.yaml`'s path
+  filters/instructions, the `adr-writer-reviewer`/`csharp-dotnet` agent definitions, and the
+  one relative link (`planned-performance-baseline.md` → `experiments/`) whose depth changed
+  because `architecture/` moved but `experiments/` didn't.
 - ADR file naming convention switched from sequential `NNNN-title.md` to `YYMMDD-<slug>.md`
   (chronological by date prefix). Renamed `0001-solution-and-project-layout.md` →
   `260811-solution-and-project-layout.md` and `0000-template.md` → `template.md`; updated

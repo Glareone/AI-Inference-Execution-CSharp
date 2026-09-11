@@ -6,7 +6,7 @@ This project's ground rules (stack, `unsafe` policy, ADR process, working style)
 ## Claude Code specifics
 
 - Subagents live in [.claude/agents/](.claude/agents/):
-  - `adr-writer-reviewer` — write or review ADRs in `architecture/` (MADR format). Use this
+  - `adr-writer-reviewer` — write or review ADRs in `docs/architecture/` (MADR format). Use this
     instead of writing ADRs freehand.
   - `csharp-dotnet` — C#/.NET implementation and review, enforcing the stack and `unsafe`
     policy from AGENTS.md.

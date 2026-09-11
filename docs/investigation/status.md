@@ -8,7 +8,7 @@
   version so individual `.csproj` files stay minimal.
 - **CLI entry point**: `InferenceEngine.Cli` wires the layers together; currently a stub
   (`Program.cs`) that compiles and runs but does no real work yet.
-- **Architecture decisions**: MADR template and the solution-layout ADR (project layout) in `architecture/`.
+- **Architecture decisions**: MADR template and the solution-layout ADR (project layout) in `docs/architecture/`.
 - **Agentic workflow**: AGENTS.md ground rules, CLAUDE.md with Claude Code subagents
   (ADR writer/reviewer, C#/.NET implementation agent).
 - **Investigation agents**: `researcher`, `huggingface-explorer`, `code-reader` in
@@ -18,7 +18,7 @@
 - **Baseline measurements**: dotLLM running at 53.9 tok/s decode on our machine.
   See `experiments/reference-measurements-dotllm.md`.
 - **dotLLM architecture traced**: full code path from CLI → GGUF load → tokenize → generate.
-  See `investigation/dotllm-architecture-trace.md`.
+  See `docs/investigation/dotllm-architecture-trace.md`.
 - **GGUF file analyzed**: parsed real metadata and tensor descriptors from our test model,
   documented mixed-precision quantization strategy of Q4_K_M.
 
@@ -53,9 +53,9 @@ file renamed to `YYMMDD-<slug>.md` — when its round comes.
 
 | Document | Status |
 |----------|--------|
-| `investigation/overview.md` | done |
-| `investigation/dotllm-architecture-trace.md` | done |
-| `investigation/gguf-format-research.md` | done |
-| `investigation/huggingface-ecosystem.md` | done |
-| `investigation/inference-engine-project-layouts.md` | done |
+| `docs/investigation/overview.md` | done |
+| `docs/investigation/dotllm-architecture-trace.md` | done |
+| `docs/investigation/gguf-format-research.md` | done |
+| `docs/investigation/huggingface-ecosystem.md` | done |
+| `docs/investigation/inference-engine-project-layouts.md` | done |
 | `experiments/reference-measurements-dotllm.md` | done |
