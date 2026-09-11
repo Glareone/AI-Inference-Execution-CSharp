@@ -48,7 +48,7 @@ Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
 
 - [260811-solution-and-project-layout.md](260811-solution-and-project-layout.md)
 - [260901-project-challenges-and-how-to-address-them.md](260901-project-challenges-and-how-to-address-them.md)
-- [reference-measurements-dotllm.md](../experiments/reference-measurements-dotllm.md)
+- [reference-measurements-dotllm.md](../../experiments/reference-measurements-dotllm.md)
 
 ## Decision Log
 

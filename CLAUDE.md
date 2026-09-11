@@ -6,10 +6,13 @@ This project's ground rules (stack, `unsafe` policy, ADR process, working style)
 ## Claude Code specifics
 
 - Subagents live in [.claude/agents/](.claude/agents/):
-  - `adr-writer-reviewer` — write or review ADRs in `architecture/` (MADR format). Use this
+  - `adr-writer-reviewer` — write or review ADRs in `docs/architecture/` (MADR format). Use this
     instead of writing ADRs freehand.
   - `csharp-dotnet` — C#/.NET implementation and review, enforcing the stack and `unsafe`
     policy from AGENTS.md.
+  - `test-writer-runner` — write, update, and run tests for any `InferenceEngine.*` project
+    (one test project per `src/` project, business-case-documented). Use after implementing or
+    changing behavior; always runs `dotnet test` and confirms it passes.
   - `researcher` — web research on inference internals (algorithms, specs, papers). Use
     before making implementation decisions.
   - `huggingface-explorer` — HuggingFace ecosystem (model formats, APIs, downloads).

@@ -37,8 +37,8 @@ cases (e.g. a tensor buffer on a proven hot path). Before writing `unsafe` code:
 ## Architecture decisions
 
 Non-trivial design decisions (tokenizer library choice, GGUF loading strategy, tensor memory
-model, KV-cache design, etc.) get an ADR in [architecture/](architecture/), using the
-[MADR](https://adr.github.io/madr/) format (template at `architecture/template.md`; ADR files
+model, KV-cache design, etc.) get an ADR in [docs/architecture/](docs/architecture/), using the
+[MADR](https://adr.github.io/madr/) format (template at `docs/architecture/template.md`; ADR files
 are named `YYMMDD-<slug>.md`, and a not-yet-written ADR may exist as a `planned-<slug>.md`
 placeholder until it's completed). Write
 or review these with the `adr-writer-reviewer` agent if using Claude Code (see
@@ -48,7 +48,7 @@ or review these with the `adr-writer-reviewer` agent if using Claude Code (see
 
 Before implementing a component, research it first using the investigation agents
 (`researcher`, `huggingface-explorer`, `code-reader`). Document findings in
-`investigation/`, then write an ADR (MADR format, in `architecture/`) capturing both
+`docs/investigation/`, then write an ADR (MADR format, in `docs/architecture/`) capturing both
 the understanding and the implementation decision. This ensures we understand *why*
 things are designed the way they are, not just *how* to call an API.
 

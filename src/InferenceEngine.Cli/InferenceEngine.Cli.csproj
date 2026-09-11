@@ -9,4 +9,8 @@
     <ProjectReference Include="..\InferenceEngine.Engine\InferenceEngine.Engine.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="InferenceEngine.Cli.Tests" />
+  </ItemGroup>
+
 </Project>

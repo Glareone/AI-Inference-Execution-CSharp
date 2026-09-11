@@ -2,6 +2,7 @@
 bin/
 obj/
 out/
+TestResults/
 
 # VS / Rider
 .vs/
@@ -11,3 +12,6 @@ out/
 
 # OS
 .DS_Store
+
+# Local CLI configuration (machine-specific model paths, etc.) — see .env.example
+.env

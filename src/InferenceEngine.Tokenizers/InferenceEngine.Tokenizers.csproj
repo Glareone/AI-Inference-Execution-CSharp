@@ -4,4 +4,8 @@
     <ProjectReference Include="..\InferenceEngine.Core\InferenceEngine.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="InferenceEngine.Tokenizers.Tests" />
+  </ItemGroup>
+
 </Project>

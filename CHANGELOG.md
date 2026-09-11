@@ -10,8 +10,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Project scaffolding: README with project goal and inspiration (dotLLM by Konrad Kokosa),
   AGENTS.md / CLAUDE.md ground rules, ADR template (`architecture/`), and Claude Code
   subagents (`adr-writer-reviewer`, `csharp-dotnet`).
-- [Solution-layout ADR](architecture/260811-solution-and-project-layout.md): solution/project layout.
-- [Project-challenges ADR](architecture/260901-project-challenges-and-how-to-address-them.md):
+- [Solution-layout ADR](docs/architecture/260811-solution-and-project-layout.md): solution/project layout.
+- [Project-challenges ADR](docs/architecture/260901-project-challenges-and-how-to-address-them.md):
   the problems each layer solves, the build-vs-reuse strategy per challenge, the fetch-once/mmap
   model-weight dependency, a runtime-call diagram, and how other engines are structured.
 - Seven placeholder ADRs (`architecture/planned-*.md`, `Status: planned`) — one per component
@@ -40,9 +40,174 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `reference-measurements-dotllm.md` — dotLLM v0.1.0-preview.3 baseline: 53.9 tok/s decode
     on SmolLM2-135M Q4_K_M, GGUF metadata dump, tensor quantization analysis
 - README.md expanded with investigation topics, references, project structure, agent descriptions.
+- **Bare-minimum end-to-end inference POC**: `InferenceEngine.Cli` now loads a real GGUF model
+  and streams generated tokens, running SmolLM2-135M-Instruct (f16) locally.
+  - `InferenceEngine.Core`: `ModelConfig`, `IModel`, `ITokenizer`, `IKvCache`, `TokenizerData` contracts.
+  - `InferenceEngine.Models`: hand-rolled GGUF v3 reader (`Gguf/`) — no maintained GGUF-parsing
+    library exists on NuGet, so format parsing had to be built rather than reused (see the
+    format-loading ADR follow-up); Llama forward pass (`Llama/`) — RMSNorm, GQA attention with
+    interleaved-pair RoPE, SwiGLU FFN, tied LM head — built on `System.Numerics.Tensors`
+    (`Math/Ops.cs`), no custom kernels, no `unsafe`. Supports F32/F16 tensors only; quantized
+    types parse correctly as metadata but throw on dequantization.
+  - `InferenceEngine.Tokenizers`: hand-rolled byte-level BPE (`GgufBpeTokenizer`) built from a
+    model's embedded vocab/merges, since GGUF doesn't embed the pre-tokenizer's splitting regex.
+    Implements the `smollm` pre-tokenizer variant (matched against llama.cpp's `unicode.cpp`).
+  - `InferenceEngine.Engine`: `SimpleKvCache` (contiguous per-layer arrays), a composable
+    `Sampler` (temperature → top-k → top-p, with a greedy short-circuit), and the
+    `InferenceSession` facade (ChatML wrapping, prefill/decode loop, streaming generation).
+  - `InferenceEngine.Cli`: `--model`, `--prompt`, `--max-tokens`, `--temperature`, `--top-k`,
+    `--top-p`, `--seed`, `--raw`, `--stats`, `--debug-tokenize`, `--debug-logits`.
+  - Verified: extracted `ModelConfig` matches the recorded dotLLM baseline exactly; tokenizer
+    round-trips exactly; top-1 next-token prediction after a test prompt is semantically
+    correct; 64-token greedy generation is coherent and factually correct, at ~38 tok/s decode
+    (f16, vs. dotLLM's 53.9 tok/s on Q4_K_M — expected, given ~2.6x the memory traffic per token
+    and no fused/quantized kernels).
+  - Explicitly out of scope for this POC (see the plan): HuggingFace download (`--model` takes
+    a local path only), batched prefill (single-token loop), the model's Jinja2 chat template
+    (hard-coded ChatML string instead), multi-threading, and HTTP serving.
+- `Directory.Build.props`: `TreatWarningsAsErrors` enabled.
+- `.claude/settings.json`: checked-in project permissions policy (read-only allowlist for the
+  model cache and dotLLM reference install; narrow, pre-approved `dotnet`/`brew` inspection
+  commands; `WebFetch` allowed for github.com, huggingface.co, raw.githubusercontent.com).
+- **Automated test suite**: one xUnit v3 (Microsoft Testing Platform) test project per `src/`
+  project — `tests/InferenceEngine.{Core,Models,Tokenizers,Engine,Cli}.Tests` — 51 tests, all
+  passing, each documenting the business scenario it protects (see each project's README.md).
+  `global.json` now selects the .NET 10 SDK's native MTP `dotnet test` runner. Highlights:
+  a synthetic-GGUF-file builder exercises the hand-rolled reader (metadata, F32/F16 tensors,
+  alignment, unsupported quant types) without needing the real 258 MB model; `Ops.cs`'s math
+  (RmsNorm/MatVec/RoPE/Softmax/SwiGLU) is checked against hand-computed values; the BPE
+  tokenizer's merge-rank ordering and digit pre-tokenization are verified directly; the sampler
+  (greedy/top-k/top-p, seeded reproducibility) and `ChatMlTemplate`'s turn ordering are covered.
+  Coverage on these hand-rolled files: `Ops.cs` 100%, `GgufFile.cs` 86%, `GgufBpeTokenizer.cs`
+  92–100%, `SamplingPipeline.cs` 98.4%, `ChatMlTemplate.cs` 100%.
+  Found and documented (not silently fixed) a real gap: `TokenizerData`'s `string[]` fields give
+  it reference-based, not value-based, record equality.
+  One minimal production seam: `CliOptions.Load` gained an optional `loadDotEnv` parameter
+  (default `true`, so production behavior is unchanged) so tests can exercise the flags/env-var
+  precedence logic without touching the filesystem or a stray real `.env`.
+  New `test-writer-runner` Claude Code agent (`.claude/agents/`) owns writing and running these
+  going forward — one test project per `src/` project, business-case-documented, always run
+  before being reported done.
+- `docs/scenarios/`: one Gherkin (`.feature`) file per `src/` project, documenting in plain
+  Given/When/Then form the business scenarios the automated tests and manual CLI verification
+  cover — plain specification files, not wired to a BDD execution framework.
+
+### Fixed
+
+CodeRabbit review findings on the POC PR:
+
+- `CliOptions.Load` no longer throws `IndexOutOfRangeException`/`FormatException` for a flag
+  missing its value or a malformed numeric flag/environment-variable value — both now raise a
+  clear `ArgumentException` naming the offending flag or variable.
+- `Program.cs` now catches `ArgumentException` around model loading and generation, not just
+  around CLI option parsing, so an `InferenceSession.Generate` validation failure (see below)
+  reports a clean one-line error and exit code 1 instead of an unhandled-exception stack trace.
+- `InferenceSession.Generate` now validates `MaxNewTokens >= 0`, a non-empty encoded prompt, and
+  the requested sequence length against `ModelConfig.MaxSeqLen` — and validates *eagerly*, before
+  returning, rather than only once the caller starts enumerating (it was refactored from a single
+  iterator method into a plain validating wrapper around a private iterator, since code before a
+  `yield` in an iterator method doesn't run until the first `MoveNext`). Previously, a negative
+  `--max-tokens` or `--raw` with an empty prompt could throw a confusing exception deep inside
+  `SimpleKvCache`, or silently sample from an empty logits span.
+- Streamed generation could show a UTF-8 replacement character when a single multi-byte
+  character's bytes were split across two generated tokens, because each token was decoded to
+  text independently. `InferenceSession` now feeds each token's raw bytes (`ITokenizer` gained
+  `GetTokenBytes`) through a new `IncrementalUtf8Decoder`, which buffers an incomplete character
+  across calls the way `System.Text.Decoder` is designed to.
+
+Second round of CodeRabbit review findings:
+
+- `GgufFile`: a file-declared count (metadata KV count, tensor count, tensor dimension count,
+  string length, array length) exceeding the file's own size now throws `InvalidDataException`
+  before any allocation sized to it — a small malformed or truncated file could otherwise trigger
+  an excessive allocation. Separately, reading a metadata string now uses `Stream.ReadExactly`
+  instead of `BinaryReader.ReadBytes`, which silently returns a shorter-than-requested array on a
+  truncated file instead of throwing.
+- `GgufTensorDescriptor.ElementCount`: the dimension-count multiplication is now `checked`, so
+  dimensions that would overflow `long` throw `OverflowException` instead of silently wrapping to
+  a smaller, incorrect (but plausible-looking) tensor size.
+- `GgufBpeTokenizer`: a merge-list entry that isn't a space-separated pair now throws a clear
+  `InvalidDataException` naming the entry, instead of `IndexOutOfRangeException` from `Split`.
+- `InferenceSession.Load` now validates that the model's vocab size (`llama.vocab_size`) matches
+  the tokenizer's vocabulary length (`tokenizer.ggml.tokens`) — both are read independently from
+  the same GGUF file, and if they disagree, a sampled id could be out of range for the tokenizer.
+  Caught at load time with a clear cause instead of an obscure exception mid-generation.
+- `LlamaModel.Forward` now rejects a `position` outside `[0, MaxSeqLen)` — its attention scratch
+  buffers are sized to `MaxSeqLen` — and `InferenceSession.PrefillTopLogits` (the `--debug-logits`
+  path, which had no such guard) now rejects a prompt longer than `MaxSeqLen` before allocating
+  the KV-cache, matching the guard already added to `Generate`.
+- `TokenizerData.UnknownTokenId`: removed — read from GGUF metadata but never consumed anywhere.
+- `Ops.Rope`: the per-pair rotation angle (`cos`/`sin`) depended only on position and pair index,
+  not on which head was being rotated, but was recomputed (`MathF.Pow`/`Cos`/`Sin`) once per head
+  per pair. Now computed once per pair and reused across all heads — fewer redundant transcendental
+  calls on the decode hot path, same result.
+- Removed several XML doc comments across the sampling types that restated what the code already
+  says (pure "what", no non-obvious "why"), per this project's comment policy.
+
+10 new tests across Models/Tokenizers/Engine (71 total, all passing): implausible GGUF counts,
+truncated-string reads, tensor dimension overflow, a malformed merge entry, the vocab-size
+consistency check, and the `PrefillTopLogits` sequence-length guard. Re-verified end-to-end
+against the real model after the `Rope` refactor and the new `GgufFile` bounds checks — output
+and load time are unchanged. Clean build (0 warnings/errors, Debug + Release, wiped `bin`/`obj`).
+
+CodeRabbit's Docstring Coverage pre-merge check (80% threshold) flagged 70 touched functions
+across 24 files — a generic platform default this repo never opted into, and one that pulls
+against the comment policy already declared in `.coderabbit.yaml` ("no WHAT comments, only
+WHY"). Rather than pad functions with restated-behavior summaries to hit a number, added
+`<inheritdoc/>` on the handful of public methods implementing an already-documented interface
+member (`LlamaModel.Forward`, and `GgufBpeTokenizer`'s `DecodeToken`/`GetTokenBytes`/
+`EosTokenId`/`TryGetId`) plus two contract-level docs on `ITokenizer.EosTokenId`/`TryGetId` that
+were genuinely missing, and three inline WHY comments for non-obvious behavior (`GgufFile.Open`'s
+dispose-on-parse-failure, `GgufTensorDescriptor.ElementCount`'s `checked` overflow guard,
+`LlamaModel.LoadFromGguf`'s config fallback defaults). The threshold itself is unaddressed by
+design — it doesn't fit this project's documented style.
+
+Third round of CodeRabbit review findings:
+
+- `CliOptions`: numeric flags/env vars (`--temperature`, `--top-p`, etc.) now parse with
+  `CultureInfo.InvariantCulture` instead of the current culture — on a comma-decimal locale,
+  `float.TryParse` without it can silently misparse or reject valid values like `0.7`.
+- `DotEnvLoader`: a line with an empty key (e.g. a stray `=value`) is now skipped instead of
+  calling `Environment.GetEnvironmentVariable`/`SetEnvironmentVariable` with an empty name, which
+  throws `ArgumentException` and — since it happens inside the `.env` line loop — previously
+  aborted every entry after it in the same file, not just the bad line.
+- `Program.cs`'s error handling now catches `InvalidDataException` and `NotSupportedException`
+  alongside `ArgumentException`. `InferenceSession.Load` can throw either (a malformed GGUF file,
+  a model/tokenizer vocab-size mismatch, or an unsupported GGUF version/architecture/tokenizer/
+  pre-tokenizer) but only `ArgumentException` was caught, so these reported as unhandled-exception
+  stack traces instead of a clean one-line error.
+- `InferenceSession.Generate`'s context-length check now compares via subtraction
+  (`options.MaxNewTokens > Config.MaxSeqLen - promptIds.Count`) instead of addition
+  (`promptIds.Count + options.MaxNewTokens > Config.MaxSeqLen`) — the addition can overflow for
+  a large `MaxNewTokens` (e.g. `int.MaxValue`) and wrap past the check instead of failing it.
+- `InferenceSession.GenerateCore` no longer runs a forward pass after yielding the very last
+  token of a `MaxNewTokens`-bounded generation — that pass's logits and KV-cache write were
+  never read by anything, since the loop exits right after. Skips the most expensive op in the
+  loop for every token-limit completion (not needed for the EOS-triggered stop, which already
+  exited before reaching it).
+- Markdown lint fixes on `.claude/agents/test-writer-runner.md` (MD041 top-level heading after
+  front matter, MD040 language on the coverage-command fence).
+- Trimmed a handful of XML/inline comments that restated behavior instead of explaining
+  non-obvious rationale (`ITokenizer.GetTokenBytes`, `IChatPromptStep`, `Timed`, `ConsoleOutput`,
+  the `FakeModel` test double) — same "WHY not WHAT" policy as the previous round.
+
+5 new tests (76 total, all passing): invariant-culture rejection of a comma-decimal value, the
+empty-`.env`-key line no longer aborting the file, the overflow-safe context-length check
+(`MaxNewTokens: int.MaxValue`), and a `FakeModel.ForwardCallCount` assertion proving the final
+forward pass is actually skipped. Re-verified end-to-end: normal generation output unchanged, a
+non-GGUF file now reports a clean error instead of a stack trace, and a comma-decimal
+`--temperature` is cleanly rejected. Clean build (0 warnings/errors, Debug + Release, wiped
+`bin`/`obj`).
 
 ### Changed
 
+- Moved `architecture/`, `investigation/`, and `scenarios/` under a new `docs/` folder
+  (`docs/architecture/`, `docs/investigation/`, `docs/scenarios/`), via `git mv` to preserve
+  history. `experiments/` stays at the repo root (not part of this move). Updated every
+  cross-reference: README, AGENTS.md, CLAUDE.md, CHANGELOG, `.coderabbit.yaml`'s path
+  filters/instructions, the `adr-writer-reviewer`/`csharp-dotnet` agent definitions, and the
+  one relative link (`planned-performance-baseline.md` → `experiments/`) whose depth changed
+  because `architecture/` moved but `experiments/` didn't.
 - ADR file naming convention switched from sequential `NNNN-title.md` to `YYMMDD-<slug>.md`
   (chronological by date prefix). Renamed `0001-solution-and-project-layout.md` →
   `260811-solution-and-project-layout.md` and `0000-template.md` → `template.md`; updated
