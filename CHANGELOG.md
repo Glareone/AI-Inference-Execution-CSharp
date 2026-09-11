@@ -40,6 +40,35 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - `reference-measurements-dotllm.md` — dotLLM v0.1.0-preview.3 baseline: 53.9 tok/s decode
     on SmolLM2-135M Q4_K_M, GGUF metadata dump, tensor quantization analysis
 - README.md expanded with investigation topics, references, project structure, agent descriptions.
+- **Bare-minimum end-to-end inference POC**: `InferenceEngine.Cli` now loads a real GGUF model
+  and streams generated tokens, running SmolLM2-135M-Instruct (f16) locally.
+  - `InferenceEngine.Core`: `ModelConfig`, `IModel`, `ITokenizer`, `IKvCache`, `TokenizerData` contracts.
+  - `InferenceEngine.Models`: hand-rolled GGUF v3 reader (`Gguf/`) — no maintained GGUF-parsing
+    library exists on NuGet, so format parsing had to be built rather than reused (see the
+    format-loading ADR follow-up); Llama forward pass (`Llama/`) — RMSNorm, GQA attention with
+    interleaved-pair RoPE, SwiGLU FFN, tied LM head — built on `System.Numerics.Tensors`
+    (`Math/Ops.cs`), no custom kernels, no `unsafe`. Supports F32/F16 tensors only; quantized
+    types parse correctly as metadata but throw on dequantization.
+  - `InferenceEngine.Tokenizers`: hand-rolled byte-level BPE (`GgufBpeTokenizer`) built from a
+    model's embedded vocab/merges, since GGUF doesn't embed the pre-tokenizer's splitting regex.
+    Implements the `smollm` pre-tokenizer variant (matched against llama.cpp's `unicode.cpp`).
+  - `InferenceEngine.Engine`: `SimpleKvCache` (contiguous per-layer arrays), a composable
+    `Sampler` (temperature → top-k → top-p, with a greedy short-circuit), and the
+    `InferenceSession` facade (ChatML wrapping, prefill/decode loop, streaming generation).
+  - `InferenceEngine.Cli`: `--model`, `--prompt`, `--max-tokens`, `--temperature`, `--top-k`,
+    `--top-p`, `--seed`, `--raw`, `--stats`, `--debug-tokenize`, `--debug-logits`.
+  - Verified: extracted `ModelConfig` matches the recorded dotLLM baseline exactly; tokenizer
+    round-trips exactly; top-1 next-token prediction after a test prompt is semantically
+    correct; 64-token greedy generation is coherent and factually correct, at ~38 tok/s decode
+    (f16, vs. dotLLM's 53.9 tok/s on Q4_K_M — expected, given ~2.6x the memory traffic per token
+    and no fused/quantized kernels).
+  - Explicitly out of scope for this POC (see the plan): HuggingFace download (`--model` takes
+    a local path only), batched prefill (single-token loop), the model's Jinja2 chat template
+    (hard-coded ChatML string instead), multi-threading, and HTTP serving.
+- `Directory.Build.props`: `TreatWarningsAsErrors` enabled.
+- `.claude/settings.json`: checked-in project permissions policy (read-only allowlist for the
+  model cache and dotLLM reference install; narrow, pre-approved `dotnet`/`brew` inspection
+  commands; `WebFetch` allowed for github.com, huggingface.co, raw.githubusercontent.com).
 
 ### Changed
 
