@@ -28,10 +28,18 @@ internal sealed record CliOptions(
         "Any option may instead be set via a .env file or environment variable, " +
         "e.g. INFERENCE_MODEL, INFERENCE_PROMPT, INFERENCE_MAX_TOKENS.";
 
-    public static CliOptions Load(string[] args)
+    /// <param name="loadDotEnv">
+    /// When <c>false</c>, skips reading <c>.env</c> files entirely, so tests can exercise the
+    /// flags/environment-merge logic in isolation from real file I/O and a stray root
+    /// <c>.env</c>. Always <c>true</c> in production.
+    /// </param>
+    public static CliOptions Load(string[] args, bool loadDotEnv = true)
     {
-        DotEnvLoader.Load(".env");
-        DotEnvLoader.Load(Path.Combine(AppContext.BaseDirectory, ".env"));
+        if (loadDotEnv)
+        {
+            DotEnvLoader.Load(".env");
+            DotEnvLoader.Load(Path.Combine(AppContext.BaseDirectory, ".env"));
+        }
 
         string? modelPath = GetEnv("MODEL");
         var prompt = GetEnv("PROMPT") ?? "";

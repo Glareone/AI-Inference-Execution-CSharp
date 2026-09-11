@@ -87,6 +87,7 @@ This project uses AI-assisted development with structured agents:
 |-------|---------|
 | `adr-writer-reviewer` | Write/review Architecture Decision Records (MADR format) |
 | `csharp-dotnet` | C#/.NET implementation and code review |
+| `test-writer-runner` | Write/update/run tests, one project per `src/` project, business-case documented |
 | `researcher` | Web research on inference internals (algorithms, specs, papers) |
 | `huggingface-explorer` | HuggingFace ecosystem (model formats, APIs, downloads) |
 | `code-reader` | Read/analyze external repos (dotLLM, LLamaSharp) |

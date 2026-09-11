@@ -69,6 +69,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `.claude/settings.json`: checked-in project permissions policy (read-only allowlist for the
   model cache and dotLLM reference install; narrow, pre-approved `dotnet`/`brew` inspection
   commands; `WebFetch` allowed for github.com, huggingface.co, raw.githubusercontent.com).
+- **Automated test suite**: one xUnit v3 (Microsoft Testing Platform) test project per `src/`
+  project — `tests/InferenceEngine.{Core,Models,Tokenizers,Engine,Cli}.Tests` — 51 tests, all
+  passing, each documenting the business scenario it protects (see each project's README.md).
+  `global.json` now selects the .NET 10 SDK's native MTP `dotnet test` runner. Highlights:
+  a synthetic-GGUF-file builder exercises the hand-rolled reader (metadata, F32/F16 tensors,
+  alignment, unsupported quant types) without needing the real 258 MB model; `Ops.cs`'s math
+  (RmsNorm/MatVec/RoPE/Softmax/SwiGLU) is checked against hand-computed values; the BPE
+  tokenizer's merge-rank ordering and digit pre-tokenization are verified directly; the sampler
+  (greedy/top-k/top-p, seeded reproducibility) and `ChatMlTemplate`'s turn ordering are covered.
+  Coverage on these hand-rolled files: `Ops.cs` 100%, `GgufFile.cs` 86%, `GgufBpeTokenizer.cs`
+  92–100%, `SamplingPipeline.cs` 98.4%, `ChatMlTemplate.cs` 100%.
+  Found and documented (not silently fixed) a real gap: `TokenizerData`'s `string[]` fields give
+  it reference-based, not value-based, record equality.
+  One minimal production seam: `CliOptions.Load` gained an optional `loadDotEnv` parameter
+  (default `true`, so production behavior is unchanged) so tests can exercise the flags/env-var
+  precedence logic without touching the filesystem or a stray real `.env`.
+  New `test-writer-runner` Claude Code agent (`.claude/agents/`) owns writing and running these
+  going forward — one test project per `src/` project, business-case-documented, always run
+  before being reported done.
 
 ### Changed
 

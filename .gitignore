@@ -2,6 +2,7 @@
 bin/
 obj/
 out/
+TestResults/
 
 # VS / Rider
 .vs/
