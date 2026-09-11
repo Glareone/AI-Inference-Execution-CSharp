@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace InferenceEngine.Engine.Sampling;
 
 /// <summary>
@@ -13,41 +15,56 @@ internal sealed class TopPStep(float p) : ISamplerStep
             return;
         }
 
-        // Array.Sort's comparator can't capture a Span<float> (a ref struct), so sort against
-        // a plain-array snapshot of the values instead.
-        var snapshot = logits.ToArray();
-        var indices = new int[logits.Length];
-        for (var i = 0; i < indices.Length; i++)
+        var length = logits.Length;
+        var keysBuffer = ArrayPool<float>.Shared.Rent(length);
+        var indicesBuffer = ArrayPool<int>.Shared.Rent(length);
+        var probsBuffer = ArrayPool<float>.Shared.Rent(length);
+        try
         {
-            indices[i] = i;
-        }
-
-        Array.Sort(indices, (a, b) => snapshot[b].CompareTo(snapshot[a]));
-
-        var maxLogit = snapshot[indices[0]];
-        var probs = new float[logits.Length];
-        var expSum = 0f;
-        for (var i = 0; i < indices.Length; i++)
-        {
-            probs[i] = MathF.Exp(snapshot[indices[i]] - maxLogit);
-            expSum += probs[i];
-        }
-
-        var cumulative = 0f;
-        var cutoff = indices.Length;
-        for (var i = 0; i < indices.Length; i++)
-        {
-            cumulative += probs[i] / expSum;
-            if (cumulative >= p)
+            var negatedKeys = keysBuffer.AsSpan(0, length);
+            var indices = indicesBuffer.AsSpan(0, length);
+            for (var i = 0; i < length; i++)
             {
-                cutoff = i + 1;
-                break;
+                // Sort ascending on the negated value == descending on the original logit —
+                // avoids a captured comparison delegate (Span.Sort dispatches via the
+                // IComparable<float> the framework already gives float, no boxing).
+                negatedKeys[i] = -logits[i];
+                indices[i] = i;
+            }
+
+            negatedKeys.Sort(indices);
+
+            var maxLogit = logits[indices[0]];
+            var probs = probsBuffer.AsSpan(0, length);
+            var expSum = 0f;
+            for (var i = 0; i < length; i++)
+            {
+                probs[i] = MathF.Exp(logits[indices[i]] - maxLogit);
+                expSum += probs[i];
+            }
+
+            var cumulative = 0f;
+            var cutoff = length;
+            for (var i = 0; i < length; i++)
+            {
+                cumulative += probs[i] / expSum;
+                if (cumulative >= p)
+                {
+                    cutoff = i + 1;
+                    break;
+                }
+            }
+
+            for (var i = cutoff; i < length; i++)
+            {
+                logits[indices[i]] = float.NegativeInfinity;
             }
         }
-
-        for (var i = cutoff; i < indices.Length; i++)
+        finally
         {
-            logits[indices[i]] = float.NegativeInfinity;
+            ArrayPool<float>.Shared.Return(keysBuffer);
+            ArrayPool<int>.Shared.Return(indicesBuffer);
+            ArrayPool<float>.Shared.Return(probsBuffer);
         }
     }
 }

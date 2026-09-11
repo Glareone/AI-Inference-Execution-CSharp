@@ -1,4 +1,4 @@
-namespace InferenceEngine.Engine;
+namespace InferenceEngine.Engine.Config;
 
 /// <summary>
 /// Options for <see cref="InferenceSession.Generate"/>. <see cref="Temperature"/> of 0 (the

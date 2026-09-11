@@ -1,3 +1,5 @@
+using System.Buffers;
+
 namespace InferenceEngine.Engine.Sampling;
 
 /// <summary>Keeps only the <c>k</c> highest logits, setting the rest to <see cref="float.NegativeInfinity"/>.</summary>
@@ -10,20 +12,33 @@ internal sealed class TopKStep(int k) : ISamplerStep
             return;
         }
 
-        // Array.Sort's comparator can't capture a Span<float> (a ref struct), so sort against
-        // a plain-array snapshot of the values instead.
-        var snapshot = logits.ToArray();
-        var indices = new int[logits.Length];
-        for (var i = 0; i < indices.Length; i++)
+        var length = logits.Length;
+        var keysBuffer = ArrayPool<float>.Shared.Rent(length);
+        var indicesBuffer = ArrayPool<int>.Shared.Rent(length);
+        try
         {
-            indices[i] = i;
+            var negatedKeys = keysBuffer.AsSpan(0, length);
+            var indices = indicesBuffer.AsSpan(0, length);
+            for (var i = 0; i < length; i++)
+            {
+                // Sort ascending on the negated value == descending on the original logit —
+                // avoids a captured comparison delegate (Span.Sort dispatches via the
+                // IComparable<float> the framework already gives float, no boxing).
+                negatedKeys[i] = -logits[i];
+                indices[i] = i;
+            }
+
+            negatedKeys.Sort(indices);
+
+            for (var i = k; i < length; i++)
+            {
+                logits[indices[i]] = float.NegativeInfinity;
+            }
         }
-
-        Array.Sort(indices, (a, b) => snapshot[b].CompareTo(snapshot[a]));
-
-        for (var i = k; i < indices.Length; i++)
+        finally
         {
-            logits[indices[i]] = float.NegativeInfinity;
+            ArrayPool<float>.Shared.Return(keysBuffer);
+            ArrayPool<int>.Shared.Return(indicesBuffer);
         }
     }
 }

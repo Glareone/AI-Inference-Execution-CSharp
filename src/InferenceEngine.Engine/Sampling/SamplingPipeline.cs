@@ -1,17 +1,19 @@
+using InferenceEngine.Engine.Config;
+
 namespace InferenceEngine.Engine.Sampling;
 
 /// <summary>
 /// The composable temperature -> top-k -> top-p chain from the sampling-pipeline ADR, with a
 /// greedy short-circuit for <see cref="GenerationOptions.Temperature"/> &lt;= 0.
 /// </summary>
-internal sealed class Sampler
+internal sealed class SamplingPipeline
 {
     private readonly List<ISamplerStep> _steps = [];
     private readonly Random _random;
     private readonly bool _greedy;
     private readonly float[] _scratch;
 
-    public Sampler(GenerationOptions options, int vocabSize)
+    public SamplingPipeline(GenerationOptions options, int vocabSize)
     {
         _greedy = options.Temperature <= 0f;
         _random = options.Seed is { } seed ? new Random(seed) : new Random();

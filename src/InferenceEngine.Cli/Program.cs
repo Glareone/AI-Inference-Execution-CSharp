@@ -1,99 +1,72 @@
-using System.Diagnostics;
+using InferenceEngine.Cli.Config;
+using InferenceEngine.Cli.Diagnostics;
+using InferenceEngine.Cli.IO;
 using InferenceEngine.Engine;
+using InferenceEngine.Engine.Config;
 
-string? modelPath = null;
-var prompt = "";
-var maxTokens = 64;
-var temperature = 0f;
-var topK = 0;
-var topP = 0f;
-int? seed = null;
-var raw = false;
-var stats = false;
-var debugTokenize = false;
-var debugLogits = false;
+IOutput output = new ConsoleOutput();
 
-for (var i = 0; i < args.Length; i++)
+CliOptions options;
+try
 {
-    switch (args[i])
-    {
-        case "--model": modelPath = args[++i]; break;
-        case "--prompt": prompt = args[++i]; break;
-        case "--max-tokens": maxTokens = int.Parse(args[++i]); break;
-        case "--temperature": temperature = float.Parse(args[++i]); break;
-        case "--top-k": topK = int.Parse(args[++i]); break;
-        case "--top-p": topP = float.Parse(args[++i]); break;
-        case "--seed": seed = int.Parse(args[++i]); break;
-        case "--raw": raw = true; break;
-        case "--stats": stats = true; break;
-        case "--debug-tokenize": debugTokenize = true; break;
-        case "--debug-logits": debugLogits = true; break;
-        default:
-            Console.Error.WriteLine($"Unknown argument: {args[i]}");
-            return 1;
-    }
+    options = CliOptions.Load(args);
 }
-
-if (modelPath is null)
+catch (ArgumentException ex)
 {
-    Console.Error.WriteLine(
-        "Usage: InferenceEngine.Cli --model <path.gguf> --prompt \"...\" " +
-        "[--max-tokens N] [--temperature T] [--top-k K] [--top-p P] [--seed N] " +
-        "[--raw] [--stats] [--debug-tokenize] [--debug-logits]");
+    output.Error(ex.Message);
+    output.Error(CliOptions.UsageText);
     return 1;
 }
 
-var loadStopwatch = Stopwatch.StartNew();
-var session = InferenceSession.Load(modelPath);
-loadStopwatch.Stop();
+var (session, loadElapsed) = Timed.Run(() => InferenceSession.Load(options.ModelPath));
 
-if (debugTokenize)
+if (options.DebugTokenize)
 {
     var config = session.Config;
-    Console.WriteLine(
+    output.WriteLine(
         $"architecture={config.Architecture} layers={config.NumLayers} hidden={config.HiddenSize} " +
         $"heads={config.NumAttentionHeads}/{config.NumKvHeads} ffn={config.FfnHiddenSize} " +
         $"vocab={config.VocabSize} ropeFreqBase={config.RopeFreqBase} maxSeqLen={config.MaxSeqLen}");
 
-    var ids = session.Tokenize(prompt, raw);
-    Console.WriteLine($"tokens ({ids.Count}): [{string.Join(", ", ids)}]");
-    Console.WriteLine($"decode: {session.Decode(ids)}");
+    var ids = session.Tokenize(options.Prompt, options.Raw);
+    output.WriteLine($"tokens ({ids.Count}): [{string.Join(", ", ids)}]");
+    output.WriteLine($"decode: {session.Decode(ids)}");
 }
 
-if (debugLogits)
+if (options.DebugLogits)
 {
-    var ids = session.Tokenize(prompt, raw);
-    Console.WriteLine("top-5 next-token logits after prefill:");
+    var ids = session.Tokenize(options.Prompt, options.Raw);
+    output.WriteLine("top-5 next-token logits after prefill:");
     foreach (var (id, text, logit) in session.PrefillTopLogits(ids, 5))
     {
-        Console.WriteLine($"  {id,6}  {logit,8:F3}  {text.Replace("\n", "\\n")}");
+        output.WriteLine($"  {id,6}  {logit,8:F3}  {text.Replace("\n", "\\n")}");
     }
 }
 
-if (debugTokenize || debugLogits)
+if (options.DebugTokenize || options.DebugLogits)
 {
     return 0;
 }
 
-var options = new GenerationOptions(maxTokens, temperature, topK, topP, seed, raw);
+var generationOptions = new GenerationOptions(options.MaxTokens, options.Temperature, options.TopK, options.TopP, options.Seed, options.Raw);
 
-var genStopwatch = Stopwatch.StartNew();
 var tokenCount = 0;
-foreach (var token in session.Generate(prompt, options))
+var genElapsed = Timed.Run(() =>
 {
-    Console.Write(token.Text);
-    tokenCount++;
-}
+    foreach (var token in session.Generate(options.Prompt, generationOptions))
+    {
+        output.Write(token.Text);
+        tokenCount++;
+    }
+});
+output.WriteLine("");
 
-genStopwatch.Stop();
-Console.WriteLine();
-
-if (stats)
+if (options.Stats)
 {
-    var tokensPerSecond = tokenCount / genStopwatch.Elapsed.TotalSeconds;
-    Console.WriteLine(
-        $"load {loadStopwatch.ElapsedMilliseconds} ms | generated {tokenCount} tok in " +
-        $"{genStopwatch.Elapsed.TotalSeconds:F2}s ({tokensPerSecond:F1} tok/s)");
+    var tokensPerSecond = tokenCount / genElapsed.TotalSeconds;
+    output.WriteLine(
+        $"load {loadElapsed.TotalMilliseconds:F0} ms | generated {tokenCount} tok in " +
+        $"{genElapsed.TotalSeconds:F2}s ({tokensPerSecond:F1} tok/s)");
 }
 
 return 0;

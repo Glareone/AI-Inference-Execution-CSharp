@@ -1,4 +1,6 @@
 using InferenceEngine.Core;
+using InferenceEngine.Engine.Config;
+using InferenceEngine.Engine.Prompting;
 using InferenceEngine.Engine.Sampling;
 using InferenceEngine.Models.Gguf;
 using InferenceEngine.Models.Llama;
@@ -16,17 +18,15 @@ public sealed record GeneratedToken(int Id, string Text);
 /// </summary>
 public sealed class InferenceSession
 {
-    // Hard-coded ChatML wrapping matching SmolLM2's `tokenizer.chat_template` metadata (a
-    // Jinja2 template we don't evaluate — see the "explicitly mocked" list in the POC plan).
-    private const string ChatMlSystemPrompt = "You are a helpful AI assistant named SmolLM, trained by Hugging Face";
-
     private readonly IModel _model;
     private readonly ITokenizer _tokenizer;
+    private readonly ChatMlTemplate _chatTemplate;
 
-    private InferenceSession(IModel model, ITokenizer tokenizer)
+    private InferenceSession(IModel model, ITokenizer tokenizer, ChatMlTemplate chatTemplate)
     {
         _model = model;
         _tokenizer = tokenizer;
+        _chatTemplate = chatTemplate;
     }
 
     public ModelConfig Config => _model.Config;
@@ -38,11 +38,13 @@ public sealed class InferenceSession
         var model = LlamaModel.LoadFromGguf(modelPath);
         var tokenizerData = GgufTokenizerReader.Read(modelPath);
         var tokenizer = GgufBpeTokenizer.Create(tokenizerData);
-        return new InferenceSession(model, tokenizer);
+        var chatTemplate = new ChatMlTemplate(ChatMlTemplate.DefaultSystemPrompt);
+        return new InferenceSession(model, tokenizer, chatTemplate);
     }
 
     /// <summary>Token ids for <paramref name="prompt"/> — ChatML-wrapped unless <paramref name="raw"/>. For <c>--debug-tokenize</c>.</summary>
-    public IReadOnlyList<int> Tokenize(string prompt, bool raw) => raw ? _tokenizer.Encode(prompt) : BuildChatMlPrompt(prompt);
+    public IReadOnlyList<int> Tokenize(string prompt, bool raw) =>
+        raw ? _tokenizer.Encode(prompt) : _chatTemplate.Build(_tokenizer, prompt);
 
     public string Decode(IEnumerable<int> ids) => _tokenizer.Decode(ids);
 
@@ -56,9 +58,10 @@ public sealed class InferenceSession
             logits = _model.Forward(promptIds[i], i, kv, needLogits: i == promptIds.Count - 1);
         }
 
-        var indices = Enumerable.Range(0, logits.Length).ToArray();
         var logitsCopy = logits.ToArray(); // capture before the span's backing buffer is reused
-        Array.Sort(indices, (a, b) => logitsCopy[b].CompareTo(logitsCopy[a]));
+        var negatedKeys = logitsCopy.Select(v => -v).ToArray();
+        var indices = Enumerable.Range(0, logitsCopy.Length).ToArray();
+        Array.Sort(negatedKeys, indices); // ascending on negated == descending on original
         return indices.Take(topN).Select(i => (i, _tokenizer.DecodeToken(i), logitsCopy[i])).ToArray();
     }
 
@@ -66,7 +69,7 @@ public sealed class InferenceSession
     {
         var promptIds = Tokenize(prompt, options.Raw);
         var kv = new SimpleKvCache(Config.NumLayers, promptIds.Count + options.MaxNewTokens, Config.NumKvHeads * Config.HeadDim);
-        var sampler = new Sampler(options, Config.VocabSize);
+        var sampler = new SamplingPipeline(options, Config.VocabSize);
 
         var position = 0;
         var logits = default(ReadOnlySpan<float>);
@@ -88,37 +91,5 @@ public sealed class InferenceSession
             logits = _model.Forward(nextId, position, kv, needLogits: true);
             position++;
         }
-    }
-
-    private List<int> BuildChatMlPrompt(string userPrompt)
-    {
-        var ids = new List<int>();
-
-        void AddSpecial(string token)
-        {
-            if (!_tokenizer.TryGetId(token, out var id))
-            {
-                throw new KeyNotFoundException($"Special token '{token}' is not in the model's vocabulary.");
-            }
-
-            ids.Add(id);
-        }
-
-        void AddText(string text) => ids.AddRange(_tokenizer.Encode(text));
-
-        AddSpecial("<|im_start|>");
-        AddText("system\n");
-        AddText(ChatMlSystemPrompt);
-        AddSpecial("<|im_end|>");
-        AddText("\n");
-        AddSpecial("<|im_start|>");
-        AddText("user\n");
-        AddText(userPrompt);
-        AddSpecial("<|im_end|>");
-        AddText("\n");
-        AddSpecial("<|im_start|>");
-        AddText("assistant\n");
-
-        return ids;
     }
 }
