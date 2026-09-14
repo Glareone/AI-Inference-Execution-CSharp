@@ -91,7 +91,7 @@ This project uses AI-assisted development with structured agents:
 
 | Agent | Purpose |
 |-------|---------|
-| `adr-writer-reviewer` | Write/review Architecture Decision Records (MADR format) |
+| `adr-author` | Write/review Architecture Decision Records (MADR format) |
 | `csharp-dotnet` | C#/.NET implementation and code review |
 | `test-writer-runner` | Write/update/run tests, one project per `src/` project, business-case documented |
 | `researcher` | Web research on inference internals (algorithms, specs, papers) |

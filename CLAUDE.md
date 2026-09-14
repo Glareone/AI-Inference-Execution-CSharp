@@ -6,8 +6,9 @@ This project's ground rules (stack, `unsafe` policy, ADR process, working style)
 ## Claude Code specifics
 
 - Subagents live in [.claude/agents/](.claude/agents/):
-  - `adr-writer-reviewer` — write or review ADRs in `docs/architecture/` (MADR format). Use this
-    instead of writing ADRs freehand.
+  - `adr-author` — write or review ADRs in `docs/architecture/` (MADR format). Use this instead
+    of writing ADRs freehand. Every ADR it writes or touches must end with a filled-in
+    "Decision Log" table.
   - `csharp-dotnet` — C#/.NET implementation and review, enforcing the stack and `unsafe`
     policy from AGENTS.md.
   - `test-writer-runner` — write, update, and run tests for any `InferenceEngine.*` project

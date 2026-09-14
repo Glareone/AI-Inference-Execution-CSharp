@@ -22,7 +22,7 @@ engine components. Your output feeds into Architecture Decision Records (ADRs).
 
 - Write code in our project (use `csharp-dotnet`).
 - Do broad web research (use `researcher`).
-- Write ADRs (use `adr-writer-reviewer`).
+- Write ADRs (use `adr-author`).
 - Modify the cloned repos.
 
 ## Primary targets

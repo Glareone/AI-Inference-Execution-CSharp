@@ -263,3 +263,14 @@ non-GGUF file now reports a clean error instead of a stack trace, and a comma-de
 - Polished the solution-layout ADR: added a project-reference diagram (Mermaid) and a
   "which project is responsible for what" table; corrected dotLLM's project count (10 → ~17);
   kept it focused on structure, with the engineering challenges moved out (see below).
+- Renamed the `adr-writer-reviewer` Claude Code agent to `adr-author` (via `git mv`, preserving
+  history) — the old name's "writer" and "reviewer" both stay true of the role, but "author"
+  covers both without the split. Updated every cross-reference: README, AGENTS.md, CLAUDE.md,
+  and the `code-reader`/`csharp-dotnet`/`huggingface-explorer`/`researcher` agent definitions.
+  Also hardened the agent's own instructions: writing or amending an ADR without ending it in a
+  filled-in "Decision Log" table is now called out as incomplete, not just implied by the
+  template, and the review checklist explicitly flags a missing/stale one as a finding.
+- `AGENTS.md`'s "Working style" and the `csharp-dotnet` agent definition now state explicitly:
+  never `git commit`/`push` without the user asking for that specific commit — approving a plan
+  or a multi-step task is not standing approval to commit along the way, and this applies to
+  work delegated to a subagent too.

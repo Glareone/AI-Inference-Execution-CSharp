@@ -40,8 +40,8 @@ Non-trivial design decisions (tokenizer library choice, GGUF loading strategy, t
 model, KV-cache design, etc.) get an ADR in [docs/architecture/](docs/architecture/), using the
 [MADR](https://adr.github.io/madr/) format (template at `docs/architecture/template.md`; ADR files
 are named `YYMMDD-<slug>.md`, and a not-yet-written ADR may exist as a `planned-<slug>.md`
-placeholder until it's completed). Write
-or review these with the `adr-writer-reviewer` agent if using Claude Code (see
+placeholder until it's completed). Every ADR ends with a "Decision Log" table (see the template) —
+never skip it. Write or review ADRs with the `adr-author` agent if using Claude Code (see
 [.claude/agents/](.claude/agents/)); otherwise just follow the template directly.
 
 ## Investigation workflow
@@ -68,3 +68,9 @@ Test model: SmolLM2-135M-Instruct (bartowski Q4_K_M, 101 MB) — installed via d
 - Don't add abstractions, config flags, or error handling for cases that can't happen yet.
   This is an investigation project — prefer the simplest thing that demonstrates the concept
   correctly, and note follow-ups instead of speculatively building for them.
+- **Never `git commit` (or `push`) without the user asking for that commit, every time** — not
+  just once at the start of a multi-step task. Finish the work, leave it staged/unstaged in the
+  working tree, and say what changed and why; let the user review the diff and explicitly say
+  "commit this" before it happens. This applies to subagents too — when delegating work that
+  touches files, don't instruct a subagent to commit on your own initiative; have it report back
+  with what it changed instead, and commit (or ask the subagent to) only after the user confirms.

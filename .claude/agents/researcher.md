@@ -25,7 +25,7 @@ Decision Records (ADRs), so structure findings to support decision-making.
 
 - Write implementation code (use `csharp-dotnet` agent for that).
 - Read external repositories in depth (use `code-reader` agent for that).
-- Write ADRs (use `adr-writer-reviewer` agent for that).
+- Write ADRs (use `adr-author` agent for that).
 - Make final decisions — you present findings, the user decides.
 
 ## Guidelines
