@@ -35,8 +35,8 @@ file renamed to `YYMMDD-<slug>.md` — when its round comes.
    tokenizer library choice and pre-tokenizer sourcing. (Ecosystem research done — see below.)
 3. **[Attention & transformer](../architecture/planned-attention-and-transformer.md)** —
    placeholder created; to fill: forward-pass approach on a math library.
-4. **[KV-cache](../architecture/planned-kv-cache.md)** — placeholder created; to fill: simple
-   vs. paged design.
+4. **[KV-cache](../architecture/260914-kv-cache.md)** — done: block-paged, head-major (HND)
+   layout, single sequence. See [kv-cache-research.md](kv-cache-research.md).
 5. **[Sampling pipeline](../architecture/planned-sampling-pipeline.md)** — placeholder created;
    to fill: composable sampler chain design.
 6. **[HuggingFace model acquisition](../architecture/planned-huggingface-acquisition.md)** —
@@ -58,4 +58,5 @@ file renamed to `YYMMDD-<slug>.md` — when its round comes.
 | `docs/investigation/gguf-format-research.md` | done |
 | `docs/investigation/huggingface-ecosystem.md` | done |
 | `docs/investigation/inference-engine-project-layouts.md` | done |
+| `docs/investigation/kv-cache-research.md` | done |
 | `experiments/reference-measurements-dotllm.md` | done |
