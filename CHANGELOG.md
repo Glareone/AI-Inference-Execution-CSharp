@@ -98,6 +98,46 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   (`LogitHash.Fnv1a`, reusable by a later end-to-end golden test) with the hardcoded golden hashes
   captured against the pre-rewrite `SimpleKvCache`. Skips cleanly (not a failure) unless
   `INFERENCE_MODEL` points at an existing GGUF file.
+- `docs/investigation/kv-cache-research.md`: the five eras of KV-cache design (contiguous →
+  PagedAttention → prefix caching → heterogeneous/quantized → distributed), why no .NET library
+  (LLamaSharp, ONNX Runtime GenAI, TorchSharp) exposes its KV cache for learning purposes, the
+  NHD-vs-HND layout analysis, this machine's measured (not assumed) cache-line/page/L2 facts, and
+  the quantitative finding driving the implementation: reordering the attention loop over KV heads
+  cuts K/V DRAM traffic 3x (283 MB → 94 MB/token at context 2048) with zero new types, while block
+  paging alone buys a single-sequence engine no measurable speedup.
+- [KV-cache ADR](docs/architecture/260914-kv-cache.md) (`260914-kv-cache.md`, replacing the
+  `planned-kv-cache.md` placeholder): chosen design is block-paged, head-major (HND) layout,
+  single sequence, landed as three separately-measured changes (loop reorder, RoPE-table hoist,
+  head-major layout + paging) rather than one bundled change.
+- **Paged, head-major KV-cache rewrite**, per the ADR above:
+  - `IKvCache` (`InferenceEngine.Core`) now exposes per-KV-head accessors — `KeySlot`/`ValueSlot`
+    (write, one head's `headDim` floats) and `KeyBlockForHead`/`ValueBlockForHead` (read, a
+    contiguous `[count, headDim]` tile) — plus `Reserve`/`Reset`/`Rollback` lifecycle methods,
+    replacing the old per-layer `Key`/`Value` row accessors that a head-major layout can't support.
+  - `KvBlockPool` + `PagedKvCache` (`InferenceEngine.Engine`, replacing `SimpleKvCache`): physical
+    KV storage in 32-token blocks, allocated lazily via `Reserve(position)` as generation advances
+    instead of exact-fit up front; freed blocks retain their arrays so `Reset()`/`Rollback()` are
+    allocation-free. `InferenceSession` now sizes both KV caches to the model's full `MaxSeqLen`
+    (cheap — an `int[]` block table, not the KV data) instead of `promptLength + maxNewTokens`.
+  - `GqaAttention` (`InferenceEngine.Models`), extracted from `LlamaModel.Forward`: the attention
+    loop now iterates KV heads outermost and the `groupSize` query heads sharing each one innermost,
+    reading each KV-head tile from the cache once and reusing it in L1 across the query heads that
+    share it, instead of re-reading it once per query head.
+  - `Ops.Rope` split into `RopeTable` (once per `Forward` call — the rotation table depends only on
+    position, not layer or head) + `RopeHead` (per head), cutting ~5,660 redundant
+    `MathF.Pow`/`Cos`/`Sin` calls per decode token.
+  - `LlamaModel`'s constructor now rejects a `NumAttentionHeads` not evenly divisible by
+    `NumKvHeads` — previously an inexact ratio silently truncated the query-head group size and
+    read another head's memory (latent bug, unreachable by SmolLM2-135M's exact 9:3 ratio).
+  - Verified bit-identical against `GoldenLogitBaselineTests`' pre-rewrite hashes at every one of
+    the six implementation commits — every step restructures *where* the same floating-point
+    operations happen, never what they compute.
+- `experiments/kv-layout-benchmark.md`: before/after measurement across the six-commit rewrite.
+  +4.7% throughput at short context (noise-level, as predicted — KV traffic is a small fraction of
+  per-token traffic there); −24.2% wall-clock time at a 1,906-token prompt, closely matching the
+  ADR's independent ~23% traffic-reduction estimate. Includes the reproduction fixture
+  (`kv-benchmark-long-prompt.txt`) and the measured hardware facts (128 B cache line, 4 MiB L2) the
+  block-size choice depends on.
 
 ### Fixed
 

@@ -5,11 +5,34 @@ assembly.
 
 ## Business scenarios covered
 
-### `SimpleKvCache` (`SimpleKvCacheTests.cs`)
+### `KvBlockPool` (`KvBlockPoolTests.cs`)
 
-- A key/value slot written for a given `(layer, position)` is read back unchanged.
-- Different `(layer, position)` pairs never overlap — writing to one slot never leaks into or
-  overwrites another, which is what makes causal attention over history correct.
+The physical block allocator every `PagedKvCache` session shares — see the
+[kv-cache ADR](../../docs/architecture/260914-kv-cache.md).
+
+- A fresh pool allocates ascending physical block ids (0, 1, 2, …), so a single sequence's
+  physical bytes land in the same order a contiguous cache would.
+- Exhausting the pool throws `InvalidOperationException` naming the pool's block capacity,
+  not a silent wraparound.
+- Freeing a block and re-allocating it returns the same id with its backing arrays retained
+  (not zeroed, not reallocated) — the property that makes `Reset()`/`Rollback()` allocation-free.
+- `(layer, kvHead, slot)` offsets never overlap within one physical block's array.
+
+### `PagedKvCache` (`PagedKvCacheTests.cs`)
+
+- A key/value slot written for a given `(layer, kvHead, position)` is read back unchanged, and
+  a tile read via `KeyBlockForHead`/`ValueBlockForHead` lines up with the same per-slot writes —
+  including across a logical block boundary.
+- Different `(layer, kvHead, position)` triples never overlap, which is what makes causal
+  attention over history correct.
+- `Reserve` is idempotent within a logical block and consumes exactly one physical block when
+  crossing into a new one — not one physical block per `Reserve` call.
+- Reading a slot before it's been `Reserve`d throws clearly, instead of silently returning
+  stale or out-of-range data.
+- `Rollback(toPosition)` frees exactly the logical blocks past the kept boundary; the freed
+  physical ids become available for a later `Reserve` to reuse, and kept data survives untouched.
+- `Reset()` returns every assigned block to the pool.
+- The block size must be a power of two — the constructor rejects anything else.
 
 ### `Sampling/SamplingPipeline`, `TopKStep`, `TopPStep` (`Sampling/*.cs`)
 
