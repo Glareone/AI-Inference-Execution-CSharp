@@ -32,6 +32,8 @@ public sealed class LlamaModel : IModel
     private readonly float[] _scores;
     private readonly float[] _probs;
     private readonly float[] _logits;
+    private readonly float[] _ropeCos;
+    private readonly float[] _ropeSin;
 
     public ModelConfig Config { get; }
 
@@ -66,6 +68,8 @@ public sealed class LlamaModel : IModel
         _scores = new float[groupSize * _scoreStride];
         _probs = new float[groupSize * _scoreStride];
         _logits = new float[config.VocabSize];
+        _ropeCos = new float[config.HeadDim / 2];
+        _ropeSin = new float[config.HeadDim / 2];
     }
 
     public static LlamaModel LoadFromGguf(string path)
@@ -112,6 +116,13 @@ public sealed class LlamaModel : IModel
         }
 
         var hiddenSize = Config.HiddenSize;
+        var headDim = Config.HeadDim;
+
+        // The rotation angle depends only on (position, freqBase, headDim) — not on layer or
+        // head — so the table is built once per Forward call (position is fixed for the whole
+        // call) instead of once per layer (60x/token for a 30-layer model: once for Q, once for
+        // cached K, per layer).
+        Ops.RopeTable(headDim, position, Config.RopeFreqBase, _ropeCos, _ropeSin);
 
         _weights.TokenEmbedding.AsSpan(tokenId * hiddenSize, hiddenSize).CopyTo(_hidden);
 
@@ -127,8 +138,15 @@ public sealed class LlamaModel : IModel
             Ops.MatVec(lw.AttnK, _kvDim, hiddenSize, _normed, kSlot);
             Ops.MatVec(lw.AttnV, _kvDim, hiddenSize, _normed, vSlot);
 
-            Ops.Rope(_q, Config.NumAttentionHeads, Config.HeadDim, position, Config.RopeFreqBase);
-            Ops.Rope(kSlot, Config.NumKvHeads, Config.HeadDim, position, Config.RopeFreqBase);
+            for (var h = 0; h < Config.NumAttentionHeads; h++)
+            {
+                Ops.RopeHead(_q.AsSpan(h * headDim, headDim), _ropeCos, _ropeSin);
+            }
+
+            for (var h = 0; h < Config.NumKvHeads; h++)
+            {
+                Ops.RopeHead(kSlot.Slice(h * headDim, headDim), _ropeCos, _ropeSin);
+            }
 
             GqaAttention.Attend(
                 kvCache, layer, position, _q, Config.NumAttentionHeads, Config.NumKvHeads,
