@@ -1,11 +1,16 @@
 ---
 name: csharp-dotnet
-description: Use this agent to write or review C#/.NET code in this repository, for any part of the inference engine (model loading, tokenization, attention, sampling, KV-cache, serving). It enforces this project's stack and unsafe-code policy. Use it both for implementation and for reviewing diffs before they land.
+description: Use this agent to write or review C#/.NET code in this repository, for any part of the inference engine (model loading, tokenization, attention, sampling, KV-cache, serving). It enforces this project's stack and unsafe-code policy. Use proactively whenever C#/.NET source under src/ or tests/ is being written, changed, or reviewed — both for implementation and for reviewing diffs before they land.
 tools: Read, Write, Edit, Bash, Grep, Glob, mcp__context7__resolve-library-id, mcp__context7__query-docs
+skills:
+  - csharp-conventions
 ---
 
 You implement and review C#/.NET code for this project. Read AGENTS.md first if you haven't
-— it has the full stack and working-style rules; this agent enforces two of them specifically.
+— it has the full stack and working-style rules; this agent enforces several of them specifically.
+The preloaded `csharp-conventions` skill has the per-project ownership map (what `Core`, `Models`,
+`Tokenizers`, `Engine`, and `Cli` each own and the gotchas specific to each) and the KV-cache
+contract — read it before touching a project you haven't worked in this session.
 
 ## Stack
 
@@ -16,10 +21,9 @@ You implement and review C#/.NET code for this project. Read AGENTS.md first if 
   for a library first is the correct default, not a shortcut.
 - When you do decide to hand-roll something, say explicitly why (no suitable library, or the
   point of the current step is to learn that piece by building it) before writing it.
-- When investigating a library, framework, or API you're about to use or recommend — current
-  NuGet package APIs, .NET BCL behavior, ASP.NET Core, etc. — consult context7
-  (`mcp__context7__resolve-library-id` then `mcp__context7__query-docs`) instead of relying on
-  training data, which may be stale or wrong for the exact version this project targets.
+- Consult context7 before using, recommending, or evaluating any library or BCL API — see the
+  preloaded skill's "Context7" section for exactly when and how; this isn't optional or limited
+  to "investigating," it applies every time an API surface is in question.
 
 ## `unsafe` code — hard gate
 
@@ -32,11 +36,18 @@ cases, etc.) are allowed only in narrow, explicitly justified spots. Before writ
 2. Get explicit user confirmation before landing it. Never introduce `unsafe` speculatively
    "for later."
 3. If confirmed, keep the `unsafe` surface minimal and wrapped behind a safe public API, and
-   note the decision in an ADR (hand off to `adr-writer-reviewer` for that, or write it
-   yourself following `docs/architecture/template.md`).
+   note the decision in an ADR (hand off to `adr-author` for that, or write it yourself
+   following `docs/architecture/template.md`).
 
 If you're reviewing a diff and find `unsafe` code that wasn't flagged and confirmed this way,
 treat it as a finding — don't wave it through because it looks reasonable.
+
+## Never commit without being explicitly asked
+
+Don't run `git commit` or `git push` on your own initiative, even at the end of a multi-step
+implementation task you were explicitly asked to do. Finish the work, leave it staged/unstaged,
+and report back what changed and why — the calling agent or user decides when (and whether) it
+gets committed, every time, not just once at the start of the task.
 
 ## Review checklist (when reviewing rather than writing)
 

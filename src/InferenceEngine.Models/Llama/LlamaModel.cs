@@ -17,6 +17,7 @@ public sealed class LlamaModel : IModel
     private readonly int _qDim;
     private readonly int _kvDim;
     private readonly float _attentionScale;
+    private readonly int _scoreStride;
 
     // Scratch buffers, allocated once so a decode step does no heap allocation.
     private readonly float[] _hidden;
@@ -31,16 +32,29 @@ public sealed class LlamaModel : IModel
     private readonly float[] _scores;
     private readonly float[] _probs;
     private readonly float[] _logits;
+    private readonly float[] _ropeCos;
+    private readonly float[] _ropeSin;
 
     public ModelConfig Config { get; }
 
     private LlamaModel(ModelConfig config, LlamaWeights weights)
     {
+        if (config.NumAttentionHeads % config.NumKvHeads != 0)
+        {
+            throw new NotSupportedException(
+                $"NumAttentionHeads ({config.NumAttentionHeads}) must be an exact multiple of " +
+                $"NumKvHeads ({config.NumKvHeads}) for grouped-query attention — an inexact " +
+                "ratio would silently truncate the query-head group size.");
+        }
+
         Config = config;
         _weights = weights;
         _qDim = config.NumAttentionHeads * config.HeadDim;
         _kvDim = config.NumKvHeads * config.HeadDim;
         _attentionScale = 1f / MathF.Sqrt(config.HeadDim);
+
+        var groupSize = config.NumAttentionHeads / config.NumKvHeads;
+        _scoreStride = config.MaxSeqLen;
 
         _hidden = new float[config.HiddenSize];
         _normed = new float[config.HiddenSize];
@@ -51,9 +65,11 @@ public sealed class LlamaModel : IModel
         _ffnUp = new float[config.FfnHiddenSize];
         _ffnSilu = new float[config.FfnHiddenSize];
         _ffnDown = new float[config.HiddenSize];
-        _scores = new float[config.MaxSeqLen];
-        _probs = new float[config.MaxSeqLen];
+        _scores = new float[groupSize * _scoreStride];
+        _probs = new float[groupSize * _scoreStride];
         _logits = new float[config.VocabSize];
+        _ropeCos = new float[config.HeadDim / 2];
+        _ropeSin = new float[config.HeadDim / 2];
     }
 
     public static LlamaModel LoadFromGguf(string path)
@@ -100,7 +116,13 @@ public sealed class LlamaModel : IModel
         }
 
         var hiddenSize = Config.HiddenSize;
-        var groupSize = Config.NumAttentionHeads / Config.NumKvHeads;
+        var headDim = Config.HeadDim;
+
+        // The rotation angle depends only on (position, freqBase, headDim) — not on layer or
+        // head — so the table is built once per Forward call (position is fixed for the whole
+        // call) instead of once per layer (60x/token for a 30-layer model: once for Q, once for
+        // cached K, per layer).
+        Ops.RopeTable(headDim, position, Config.RopeFreqBase, _ropeCos, _ropeSin);
 
         _weights.TokenEmbedding.AsSpan(tokenId * hiddenSize, hiddenSize).CopyTo(_hidden);
 
@@ -110,39 +132,30 @@ public sealed class LlamaModel : IModel
 
             Ops.RmsNorm(_hidden, lw.AttnNorm, Config.RmsNormEps, _normed);
 
-            var kSlot = kvCache.KeySlot(layer, position);
-            var vSlot = kvCache.ValueSlot(layer, position);
             Ops.MatVec(lw.AttnQ, _qDim, hiddenSize, _normed, _q);
-            Ops.MatVec(lw.AttnK, _kvDim, hiddenSize, _normed, kSlot);
-            Ops.MatVec(lw.AttnV, _kvDim, hiddenSize, _normed, vSlot);
-
-            Ops.Rope(_q, Config.NumAttentionHeads, Config.HeadDim, position, Config.RopeFreqBase);
-            Ops.Rope(kSlot, Config.NumKvHeads, Config.HeadDim, position, Config.RopeFreqBase);
-
-            var contextLength = position + 1;
-            for (var qh = 0; qh < Config.NumAttentionHeads; qh++)
+            for (var h = 0; h < Config.NumAttentionHeads; h++)
             {
-                var kvh = qh / groupSize;
-                var qHead = _q.AsSpan(qh * Config.HeadDim, Config.HeadDim);
-
-                for (var t = 0; t < contextLength; t++)
-                {
-                    var kHead = kvCache.Key(layer, t).Slice(kvh * Config.HeadDim, Config.HeadDim);
-                    _scores[t] = TensorPrimitives.Dot(qHead, kHead) * _attentionScale;
-                }
-
-                var scores = _scores.AsSpan(0, contextLength);
-                var probs = _probs.AsSpan(0, contextLength);
-                Ops.Softmax(scores, probs);
-
-                var outHead = _attnOut.AsSpan(qh * Config.HeadDim, Config.HeadDim);
-                outHead.Clear();
-                for (var t = 0; t < contextLength; t++)
-                {
-                    var vHead = kvCache.Value(layer, t).Slice(kvh * Config.HeadDim, Config.HeadDim);
-                    TensorPrimitives.MultiplyAdd(vHead, probs[t], outHead, outHead);
-                }
+                Ops.RopeHead(_q.AsSpan(h * headDim, headDim), _ropeCos, _ropeSin);
             }
+
+            // Per-KV-head write + RoPE, not one packed kvDim-wide MatVec/Rope call: the
+            // head-major cache exposes one head's slot at a time. Each head's row range
+            // [kvh*headDim, (kvh+1)*headDim) of AttnK/AttnV produces the identical dot products,
+            // in the identical row order (0..kvDim), as the original single packed call — just
+            // split at head boundaries — so this is bit-identical, not a numeric change.
+            for (var kvh = 0; kvh < Config.NumKvHeads; kvh++)
+            {
+                var kSlot = kvCache.KeySlot(layer, kvh, position);
+                var vSlot = kvCache.ValueSlot(layer, kvh, position);
+                var rowOffset = kvh * headDim * hiddenSize;
+                Ops.MatVec(lw.AttnK.AsSpan(rowOffset, headDim * hiddenSize), headDim, hiddenSize, _normed, kSlot);
+                Ops.MatVec(lw.AttnV.AsSpan(rowOffset, headDim * hiddenSize), headDim, hiddenSize, _normed, vSlot);
+                Ops.RopeHead(kSlot, _ropeCos, _ropeSin);
+            }
+
+            GqaAttention.Attend(
+                kvCache, layer, position, _q, Config.NumAttentionHeads, Config.NumKvHeads,
+                Config.HeadDim, _attentionScale, _scoreStride, _scores, _probs, _attnOut);
 
             Ops.MatVec(lw.AttnOutput, hiddenSize, _qDim, _attnOut, _attnProjected);
             TensorPrimitives.Add(_hidden, _attnProjected, _hidden);

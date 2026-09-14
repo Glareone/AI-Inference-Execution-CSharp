@@ -36,36 +36,62 @@ internal static class Ops
     /// time (see <c>convert_hf_to_gguf.py</c>) specifically so this layout — not HF's
     /// half-split rotation — is the one that reproduces the original model's behavior.
     /// </summary>
+    /// <remarks>
+    /// Thin wrapper over <see cref="RopeTable"/> + <see cref="RopeHead"/>, kept for callers (and
+    /// tests) that don't need to hoist the table themselves. Per-call-site hot paths that apply
+    /// RoPE to multiple heads/slots at the same position should call <see cref="RopeTable"/> once
+    /// and <see cref="RopeHead"/> per head instead, since the table depends only on
+    /// (position, freqBase, headDim) — not on the head.
+    /// </remarks>
     public static void Rope(Span<float> vec, int numHeads, int headDim, int position, float freqBase)
     {
         var half = headDim / 2;
-
-        // The rotation angle depends only on (position, i, freqBase) — not on the head — so
-        // compute cos/sin once per pair and reuse across every head, instead of recomputing the
-        // same MathF.Pow/Cos/Sin per head on this per-layer, per-token hot path.
         Span<float> cosCache = half <= 128 ? stackalloc float[half] : new float[half];
         Span<float> sinCache = half <= 128 ? stackalloc float[half] : new float[half];
-        for (var i = 0; i < half; i++)
-        {
-            var theta = position * MathF.Pow(freqBase, -2f * i / headDim);
-            cosCache[i] = MathF.Cos(theta);
-            sinCache[i] = MathF.Sin(theta);
-        }
+        RopeTable(headDim, position, freqBase, cosCache, sinCache);
 
         for (var h = 0; h < numHeads; h++)
         {
-            var baseIndex = h * headDim;
-            for (var i = 0; i < half; i++)
-            {
-                var cos = cosCache[i];
-                var sin = sinCache[i];
-                var i0 = baseIndex + (2 * i);
-                var i1 = i0 + 1;
-                var x0 = vec[i0];
-                var x1 = vec[i1];
-                vec[i0] = (x0 * cos) - (x1 * sin);
-                vec[i1] = (x0 * sin) + (x1 * cos);
-            }
+            RopeHead(vec.Slice(h * headDim, headDim), cosCache, sinCache);
+        }
+    }
+
+    /// <summary>
+    /// Fills <paramref name="cos"/>/<paramref name="sin"/> (each <c>headDim/2</c> long) with the
+    /// per-pair rotation angle's cos/sin at <paramref name="position"/> — depends only on
+    /// (position, freqBase, headDim), not on any one head, so a caller applying RoPE to several
+    /// heads at the same position computes this once and reuses it via <see cref="RopeHead"/>
+    /// instead of recomputing the same <see cref="MathF.Pow"/>/<see cref="MathF.Cos"/>/
+    /// <see cref="MathF.Sin"/> calls per head.
+    /// </summary>
+    public static void RopeTable(int headDim, int position, float freqBase, Span<float> cos, Span<float> sin)
+    {
+        var half = headDim / 2;
+        for (var i = 0; i < half; i++)
+        {
+            var theta = position * MathF.Pow(freqBase, -2f * i / headDim);
+            cos[i] = MathF.Cos(theta);
+            sin[i] = MathF.Sin(theta);
+        }
+    }
+
+    /// <summary>
+    /// Applies the interleaved-pair rotation to one head (<c>headDim</c> floats, in place) using
+    /// a table already filled by <see cref="RopeTable"/>.
+    /// </summary>
+    public static void RopeHead(Span<float> head, ReadOnlySpan<float> cos, ReadOnlySpan<float> sin)
+    {
+        var half = cos.Length;
+        for (var i = 0; i < half; i++)
+        {
+            var c = cos[i];
+            var s = sin[i];
+            var i0 = 2 * i;
+            var i1 = i0 + 1;
+            var x0 = head[i0];
+            var x1 = head[i1];
+            head[i0] = (x0 * c) - (x1 * s);
+            head[i1] = (x0 * s) + (x1 * c);
         }
     }
 

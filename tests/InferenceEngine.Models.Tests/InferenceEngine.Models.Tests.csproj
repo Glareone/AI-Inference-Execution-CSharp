@@ -11,5 +11,14 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\InferenceEngine.Models\InferenceEngine.Models.csproj" />
+    <!--
+      InferenceEngine.Engine is referenced in addition to the usual single 1:1 project (Models),
+      only for Llama/GoldenLogitBaselineTests.cs: that golden-hash test must drive prefill
+      through InferenceSession.PrefillTopLogits (the exact code path InferenceEngine.Cli's debug
+      logits flag uses), not a hand-rolled reimplementation of chat templating and KV-cache
+      wiring - ChatMlTemplate is internal to Engine, so there is no way to build the same
+      164-token prompt without going through InferenceSession itself. See that test's summary.
+    -->
+    <ProjectReference Include="..\..\src\InferenceEngine.Engine\InferenceEngine.Engine.csproj" />
   </ItemGroup>
 </Project>

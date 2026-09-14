@@ -27,7 +27,7 @@ consumed. Your output feeds into Architecture Decision Records (ADRs).
 
 - Write implementation code.
 - Read external C# repos in depth (use `code-reader`).
-- Write ADRs (use `adr-writer-reviewer`).
+- Write ADRs (use `adr-author`).
 
 ## Guidelines
 

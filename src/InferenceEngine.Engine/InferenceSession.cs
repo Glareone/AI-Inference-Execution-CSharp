@@ -19,6 +19,9 @@ public sealed record GeneratedToken(int Id, string Text);
 /// </summary>
 public sealed class InferenceSession
 {
+    /// <summary>Tokens per physical KV-cache block — see the kv-cache ADR's block-size rationale.</summary>
+    private const int KvBlockSize = 32;
+
     private readonly IModel _model;
     private readonly ITokenizer _tokenizer;
     private readonly ChatMlTemplate _chatTemplate;
@@ -78,10 +81,11 @@ public sealed class InferenceSession
                 $"Prompt length {promptIds.Count} exceeds the model's max context ({Config.MaxSeqLen}).", nameof(promptIds));
         }
 
-        var kv = new SimpleKvCache(Config.NumLayers, promptIds.Count, Config.NumKvHeads * Config.HeadDim);
+        var kv = CreateKvCache();
         var logits = default(ReadOnlySpan<float>);
         for (var i = 0; i < promptIds.Count; i++)
         {
+            kv.Reserve(i);
             logits = _model.Forward(promptIds[i], i, kv, needLogits: i == promptIds.Count - 1);
         }
 
@@ -110,6 +114,12 @@ public sealed class InferenceSession
             throw new ArgumentException("The prompt encoded to zero tokens; nothing to generate from.", nameof(prompt));
         }
 
+        // This is no longer a KV-cache sizing check — PagedKvCache grows lazily up to
+        // Config.MaxSeqLen regardless of promptIds.Count/MaxNewTokens, so it costs nothing to
+        // let a too-long request past a cache-capacity check. It stays because Config.MaxSeqLen
+        // is also the model's trained context window: RoPE's positional encoding (RopeFreqBase)
+        // wasn't fit beyond it, and LlamaModel.Forward has its own `position < Config.MaxSeqLen`
+        // scratch-buffer bound check that would throw mid-generation instead of before starting.
         // Compared via subtraction, not promptIds.Count + options.MaxNewTokens > Config.MaxSeqLen —
         // that addition can overflow for a large MaxNewTokens (e.g. int.MaxValue) and wrap past
         // the check instead of failing it.
@@ -120,12 +130,12 @@ public sealed class InferenceSession
                 $"exceeds the model's max context ({Config.MaxSeqLen}).");
         }
 
-        return GenerateCore(promptIds, promptIds.Count + options.MaxNewTokens, options);
+        return GenerateCore(promptIds, options);
     }
 
-    private IEnumerable<GeneratedToken> GenerateCore(IReadOnlyList<int> promptIds, int sequenceLength, GenerationOptions options)
+    private IEnumerable<GeneratedToken> GenerateCore(IReadOnlyList<int> promptIds, GenerationOptions options)
     {
-        var kv = new SimpleKvCache(Config.NumLayers, sequenceLength, Config.NumKvHeads * Config.HeadDim);
+        var kv = CreateKvCache();
         var sampler = new SamplingPipeline(options, Config.VocabSize);
         var decoder = new IncrementalUtf8Decoder();
 
@@ -133,6 +143,7 @@ public sealed class InferenceSession
         var logits = default(ReadOnlySpan<float>);
         for (; position < promptIds.Count; position++)
         {
+            kv.Reserve(position);
             logits = _model.Forward(promptIds[position], position, kv, needLogits: position == promptIds.Count - 1);
         }
 
@@ -154,8 +165,24 @@ public sealed class InferenceSession
                 yield break;
             }
 
+            kv.Reserve(position);
             logits = _model.Forward(nextId, position, kv, needLogits: true);
             position++;
         }
+    }
+
+    /// <summary>
+    /// A block pool and <see cref="PagedKvCache"/> sized to the model's full
+    /// <see cref="ModelConfig.MaxSeqLen"/>, not the actual prompt/generation length — physical
+    /// blocks are allocated lazily by <see cref="PagedKvCache.Reserve"/> as <c>position</c>
+    /// advances, so passing the max capacity here costs an <c>int[]</c> block table and a
+    /// nullable-array free list, not the KV data itself.
+    /// </summary>
+    private PagedKvCache CreateKvCache()
+    {
+        var capacity = Config.MaxSeqLen;
+        var maxBlocks = (capacity + KvBlockSize - 1) / KvBlockSize;
+        var pool = new KvBlockPool(Config.NumLayers, Config.NumKvHeads, Config.HeadDim, KvBlockSize, maxBlocks);
+        return new PagedKvCache(pool, Config.HeadDim, KvBlockSize, capacity);
     }
 }

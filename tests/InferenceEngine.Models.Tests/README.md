@@ -39,3 +39,41 @@ implementation logic:
 
 Note: `Ops` lives in a namespace literally named `Math` (shadowing `System.Math` once imported),
 so `OpsTests.cs` only ever uses `MathF` for scalar math to avoid the ambiguity.
+
+### `Llama/GqaAttentionTests` — attention-loop equivalence
+
+`GqaAttention.Attend` (extracted from `LlamaModel.Forward`'s attention block per the
+[kv-cache ADR](../../docs/architecture/260914-kv-cache.md)) must compute exactly the same
+floating-point values, in exactly the same accumulation order, as an independent transcription of
+the pre-extraction attention math — not just "look equivalent". The reference is transcribed
+directly from the original `LlamaModel.cs` attention block, not by calling `GqaAttention`, so a
+bug introduced during extraction or the KV-head-outermost loop reorder can't hide from both sides
+of the comparison at once. Parameterized over context lengths (`1, 31, 32, 33, 64, 65, 96, 129`)
+chosen to straddle 32-token block boundaries.
+
+### `Llama/GoldenLogitBaselineTests` — golden KV-cache logit baseline
+
+A frozen-in-time correctness oracle, originally captured against the pre-rewrite `SimpleKvCache`
+implementation before the KV-cache rewrite in `docs/architecture/260914-kv-cache.md` began:
+prefilling the real SmolLM2-135M-Instruct GGUF model with a fixed short prompt and a fixed long
+prompt (long enough to span several 32-token cache blocks) always produces the identical
+next-token logit distribution, bit-for-bit. The hardcoded `Fnv1a` hashes held unchanged across
+every one of the rewrite's six implementation commits (loop reorder, RoPE-table hoist, head-major
+layout, block paging, session wiring) — proof the rewrite restructured *where* the floating-point
+operations happen, never what they compute. The top-10 `(tokenId, logit)` pairs are captured
+alongside for human debuggability if a hash ever mismatches. `LogitHash.Fnv1a` (hashing raw
+IEEE-754 bit patterns, not decimal text) is written as a small reusable static method so any
+future rewrite can compute the same hash for comparison.
+
+Requires the real 270 MB model and is slow (a few seconds of real prefill), so it skips cleanly —
+not a failure — unless `INFERENCE_MODEL` is set to an existing GGUF file path:
+
+```sh
+INFERENCE_MODEL=~/.cache/inference-engine/models/SmolLM2-135M-Instruct-f16.gguf dotnet test ...
+```
+
+(with `~` already expanded by the shell). This is the only test in this project that references
+`InferenceEngine.Engine` in addition to `InferenceEngine.Models` — it needs
+`InferenceSession.PrefillTopLogits` (the exact code path `InferenceEngine.Cli`'s debug-logits
+flag drives) because the chat-template wrapping that produces the fixed 164-token long prompt is
+internal to `Engine` and can't be reconstructed from `Models` alone.

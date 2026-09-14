@@ -91,6 +91,53 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `docs/scenarios/`: one Gherkin (`.feature`) file per `src/` project, documenting in plain
   Given/When/Then form the business scenarios the automated tests and manual CLI verification
   cover — plain specification files, not wired to a BDD execution framework.
+- `Llama/GoldenLogitBaselineTests` (`tests/InferenceEngine.Models.Tests/`): a golden correctness
+  oracle for the upcoming KV-cache rewrite. Prefills the real SmolLM2-135M-Instruct GGUF model
+  (via `InferenceSession.PrefillTopLogits`, the same path `--debug-logits` drives) for a short and
+  a multi-block-spanning long prompt, and hashes the full logit vector's raw IEEE-754 bit patterns
+  (`LogitHash.Fnv1a`, reusable by a later end-to-end golden test) with the hardcoded golden hashes
+  captured against the pre-rewrite `SimpleKvCache`. Skips cleanly (not a failure) unless
+  `INFERENCE_MODEL` points at an existing GGUF file.
+- `docs/investigation/kv-cache-research.md`: the five eras of KV-cache design (contiguous →
+  PagedAttention → prefix caching → heterogeneous/quantized → distributed), why no .NET library
+  (LLamaSharp, ONNX Runtime GenAI, TorchSharp) exposes its KV cache for learning purposes, the
+  NHD-vs-HND layout analysis, this machine's measured (not assumed) cache-line/page/L2 facts, and
+  the quantitative finding driving the implementation: reordering the attention loop over KV heads
+  cuts K/V DRAM traffic 3x (283 MB → 94 MB/token at context 2048) with zero new types, while block
+  paging alone buys a single-sequence engine no measurable speedup.
+- [KV-cache ADR](docs/architecture/260914-kv-cache.md) (`260914-kv-cache.md`, replacing the
+  `planned-kv-cache.md` placeholder): chosen design is block-paged, head-major (HND) layout,
+  single sequence, landed as three separately-measured changes (loop reorder, RoPE-table hoist,
+  head-major layout + paging) rather than one bundled change.
+- **Paged, head-major KV-cache rewrite**, per the ADR above:
+  - `IKvCache` (`InferenceEngine.Core`) now exposes per-KV-head accessors — `KeySlot`/`ValueSlot`
+    (write, one head's `headDim` floats) and `KeyBlockForHead`/`ValueBlockForHead` (read, a
+    contiguous `[count, headDim]` tile) — plus `Reserve`/`Reset`/`Rollback` lifecycle methods,
+    replacing the old per-layer `Key`/`Value` row accessors that a head-major layout can't support.
+  - `KvBlockPool` + `PagedKvCache` (`InferenceEngine.Engine`, replacing `SimpleKvCache`): physical
+    KV storage in 32-token blocks, allocated lazily via `Reserve(position)` as generation advances
+    instead of exact-fit up front; freed blocks retain their arrays so `Reset()`/`Rollback()` are
+    allocation-free. `InferenceSession` now sizes both KV caches to the model's full `MaxSeqLen`
+    (cheap — an `int[]` block table, not the KV data) instead of `promptLength + maxNewTokens`.
+  - `GqaAttention` (`InferenceEngine.Models`), extracted from `LlamaModel.Forward`: the attention
+    loop now iterates KV heads outermost and the `groupSize` query heads sharing each one innermost,
+    reading each KV-head tile from the cache once and reusing it in L1 across the query heads that
+    share it, instead of re-reading it once per query head.
+  - `Ops.Rope` split into `RopeTable` (once per `Forward` call — the rotation table depends only on
+    position, not layer or head) + `RopeHead` (per head), cutting ~5,660 redundant
+    `MathF.Pow`/`Cos`/`Sin` calls per decode token.
+  - `LlamaModel`'s constructor now rejects a `NumAttentionHeads` not evenly divisible by
+    `NumKvHeads` — previously an inexact ratio silently truncated the query-head group size and
+    read another head's memory (latent bug, unreachable by SmolLM2-135M's exact 9:3 ratio).
+  - Verified bit-identical against `GoldenLogitBaselineTests`' pre-rewrite hashes at every one of
+    the six implementation commits — every step restructures *where* the same floating-point
+    operations happen, never what they compute.
+- `experiments/kv-layout-benchmark.md`: before/after measurement across the six-commit rewrite.
+  +4.7% throughput at short context (noise-level, as predicted — KV traffic is a small fraction of
+  per-token traffic there); −24.2% wall-clock time at a 1,906-token prompt, closely matching the
+  ADR's independent ~23% traffic-reduction estimate. Includes the reproduction fixture
+  (`kv-benchmark-long-prompt.txt`) and the measured hardware facts (128 B cache line, 4 MiB L2) the
+  block-size choice depends on.
 
 ### Fixed
 
@@ -199,6 +246,43 @@ non-GGUF file now reports a clean error instead of a stack trace, and a comma-de
 `--temperature` is cleanly rejected. Clean build (0 warnings/errors, Debug + Release, wiped
 `bin`/`obj`).
 
+CodeRabbit review findings on the KV-cache-rewrite PR:
+
+- `PagedKvCache.Rollback` now rejects a `toPosition` outside `[0, Length]` with
+  `ArgumentOutOfRangeException` instead of silently corrupting state — a negative target froze
+  `Length` at a nonsensical negative value, and a target past `Length` marked never-written
+  positions as resident. Two new tests cover both directions; `IKvCache.Rollback`'s doc comment
+  now states the contract.
+- `PagedKvCacheTests`' rollback test wrote and re-read a sentinel at a position inside the
+  partially-retained block instead of only re-reading a default-valued position — the previous
+  assertion (`0f == 0f`) would have passed even if that block had been wrongly freed.
+- `docs/investigation/status.md` no longer contradicts itself: the CLI-is-a-stub and
+  generation-loop-is-future-work bullets were still there next to the new KV-cache-done entry.
+  Updated to match the actual end-to-end state.
+- `experiments/kv-layout-benchmark.md`'s observation "the loop reorder is the whole story" is not
+  something the before/after commits can establish — they bundle the loop reorder, head-major
+  layout, and paging together, so no single change's share of the measured speedup is isolated.
+  Reworded to say what the measurement actually shows (consistent with a bandwidth-bound change)
+  versus what it can't (attribution to one of the three).
+- `README.md`'s "tiny models" bound (≤ ~500M params) listed TinyLlama-1.1B as an example, which is
+  more than double that bound. Moved it to the medium-model bullet, where it actually belongs, and
+  noted it's the boundary case an F16 GGUF would already load.
+- Two markdownlint MD040 fixes (missing fence language) and one WHAT-vs-WHY trim on
+  `LogitHash`'s class doc, matching this repo's established comment policy.
+- Same Docstring Coverage pre-merge check as `6ae9b9b`, same resolution: the 80% threshold is a
+  generic default this repo hasn't opted into, and it conflicts with `.coderabbit.yaml`'s own
+  `**/*.cs` policy ("no WHAT comments, only WHY when non-obvious"). Added `<inheritdoc/>` to every
+  `PagedKvCache` member implementing an already-documented `IKvCache` member (`BlockSize`,
+  `HeadDim`, `Capacity`, `Length`, `Reserve`, `KeySlot`, `ValueSlot`, `KeyBlockForHead`,
+  `ValueBlockForHead`, `Reset`, `Rollback`) instead of restating their docs — the actual gap was
+  that the interface's existing documentation wasn't surfaced on the implementation, not that the
+  behavior was undocumented. Left the trivial one-line accessors on `KvBlockPool`
+  (`KeyStore`/`ValueStore`/`HeadDim`/`NumLayers`) undocumented, same as before — self-explanatory,
+  not a real gap.
+
+Verified: `dotnet build` (0 warnings/errors) and `dotnet test` (99/99, up from 97 — the two new
+`Rollback` validation tests) both pass.
+
 ### Changed
 
 - Moved `architecture/`, `investigation/`, and `scenarios/` under a new `docs/` folder
@@ -216,3 +300,14 @@ non-GGUF file now reports a clean error instead of a stack trace, and a comma-de
 - Polished the solution-layout ADR: added a project-reference diagram (Mermaid) and a
   "which project is responsible for what" table; corrected dotLLM's project count (10 → ~17);
   kept it focused on structure, with the engineering challenges moved out (see below).
+- Renamed the `adr-writer-reviewer` Claude Code agent to `adr-author` (via `git mv`, preserving
+  history) — the old name's "writer" and "reviewer" both stay true of the role, but "author"
+  covers both without the split. Updated every cross-reference: README, AGENTS.md, CLAUDE.md,
+  and the `code-reader`/`csharp-dotnet`/`huggingface-explorer`/`researcher` agent definitions.
+  Also hardened the agent's own instructions: writing or amending an ADR without ending it in a
+  filled-in "Decision Log" table is now called out as incomplete, not just implied by the
+  template, and the review checklist explicitly flags a missing/stale one as a finding.
+- `AGENTS.md`'s "Working style" and the `csharp-dotnet` agent definition now state explicitly:
+  never `git commit`/`push` without the user asking for that specific commit — approving a plan
+  or a multi-step task is not standing approval to commit along the way, and this applies to
+  work delegated to a subagent too.
