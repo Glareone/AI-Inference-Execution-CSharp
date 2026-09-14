@@ -81,9 +81,17 @@ rationale behind this layout.
 
 ## Test Model
 
-**SmolLM2-135M-Instruct** (bartowski Q4_K_M, 101 MB) — smallest model that produces
-coherent text. Llama architecture, 30 layers, 576 hidden dim, GQA 3:1, 49K vocab.
-Fast enough to iterate on (53.9 tok/s decode on our test machine via dotLLM).
+**SmolLM2-135M-Instruct**, Llama architecture, 30 layers, 576 hidden dim, GQA 3:1 (9 query / 3 KV
+heads), 49K vocab. Small enough to iterate on, large enough to produce coherent text.
+
+Two GGUF variants are in play, for different reasons:
+
+- **F16** (`bartowski/SmolLM2-135M-Instruct-GGUF`, ~270 MB) — what *this* engine actually loads
+  and runs. Our GGUF reader only materializes F32/F16 tensor data (see Status below), so this is
+  the variant `--model` points at.
+- **Q4_K_M** (101 MB) — installed via the dotLLM CLI and used only as the reference baseline
+  (53.9 tok/s decode) in [experiments/reference-measurements-dotllm.md](experiments/reference-measurements-dotllm.md).
+  Our engine cannot load this file yet — quantized tensors parse as metadata but throw on read.
 
 ## Claude Code Agents
 
@@ -103,10 +111,98 @@ documentation instead of relying on training data.
 
 ## Status
 
-**Investigation phase** — researching internals before implementation. Solution scaffolding
-exists and builds. dotLLM installed as reference tool. No inference code yet.
-See [docs/investigation/status.md](docs/investigation/status.md) for detailed progress and
-[CHANGELOG.md](CHANGELOG.md) for changes.
+**End-to-end generation works.** `dotnet run --project src/InferenceEngine.Cli -- --model
+<path.gguf> --prompt "..."` loads a GGUF file, tokenizes, runs the full transformer forward pass,
+samples, and streams generated text — on real weights, not a stub. Last verified: 2026-09-14.
+
+### What works today
+
+- **Model loading**: hand-rolled GGUF v3 reader (`InferenceEngine.Models/Gguf/`), memory-mapped,
+  metadata + tensor descriptors + F32/F16 tensor data.
+- **Tokenization**: hand-rolled byte-level BPE (`InferenceEngine.Tokenizers/`) sourced from the
+  GGUF file's own embedded vocab/merges — no external tokenizer file needed.
+- **Transformer forward pass**: embeddings → RMSNorm → grouped-query attention with RoPE →
+  SwiGLU FFN → LM head (`InferenceEngine.Models/Llama/`), built entirely on
+  `System.Numerics.Tensors.TensorPrimitives` — no hand-written SIMD/intrinsics, no `unsafe`.
+- **KV-cache**: block-paged, head-major (HND) layout — 32-token blocks, lazy allocation, the
+  attention loop reordered to cut K/V memory traffic ~3x over a naive per-query-head walk. See the
+  [KV-cache ADR](docs/architecture/260914-kv-cache.md) and its
+  [benchmark](experiments/kv-layout-benchmark.md) (+4.7% at short context, −24% wall-clock at a
+  1,900-token prompt vs. the original contiguous cache).
+- **Sampling**: composable temperature / top-k / top-p pipeline (`InferenceEngine.Engine/Sampling/`).
+- **CLI**: streamed token output, `--stats`, `--debug-tokenize`, `--debug-logits`, `.env` config.
+
+On this dev machine (Apple M4 Pro), SmolLM2-135M-Instruct-F16 generates at **~30 tok/s decode**
+at short context (see [experiments/kv-layout-benchmark.md](experiments/kv-layout-benchmark.md) for
+longer-context numbers).
+
+### Test coverage
+
+**97 test cases, 0 failing**, one xUnit v3 project per `src/` project:
+
+| Project | Test cases (incl. `[Theory]` rows) |
+|---|---|
+| `InferenceEngine.Core.Tests` | 4 |
+| `InferenceEngine.Tokenizers.Tests` | 8 |
+| `InferenceEngine.Cli.Tests` | 20 |
+| `InferenceEngine.Models.Tests` | 33 (incl. a bit-exact FNV-1a golden-logit-hash regression test against the real model) |
+| `InferenceEngine.Engine.Tests` | 32 |
+
+Run with `dotnet test`. Two of the `Models.Tests` cases (the golden-logit baseline) additionally
+need `INFERENCE_MODEL=<path.gguf>` set to a real GGUF file — they skip cleanly, not fail, when it
+isn't. See each test project's own `README.md` for the business scenarios covered.
+
+### Architecture decisions
+
+| ADR | Status |
+|---|---|
+| [Solution and project layout](docs/architecture/260811-solution-and-project-layout.md) | proposed |
+| [Project challenges and how to address them](docs/architecture/260901-project-challenges-and-how-to-address-them.md) | proposed |
+| [Paged + head-major KV-cache](docs/architecture/260914-kv-cache.md) | proposed |
+| Attention & transformer, model format loading, tokenization, sampling pipeline | still `planned` placeholders — each is already implemented in code, the ADR write-up just hasn't caught up |
+| HuggingFace model acquisition, performance baseline | still `planned` placeholders, and genuinely not started — models are fetched via the dotLLM CLI as a stopgap, not a real download path of our own, and there's no formal performance-baseline methodology yet beyond the ad hoc measurements in `experiments/` |
+
+### Known limitations
+
+- **Only F32/F16 GGUF tensors load.** Every quantized type (Q4_0, Q4_K, Q5_K, Q6_K, Q8_0, …)
+  parses as metadata/shape but throws `NotSupportedException` on read. Dequantization math is
+  already researched ([docs/investigation/gguf-format-research.md](docs/investigation/gguf-format-research.md))
+  but not implemented.
+- **Only `general.architecture == "llama"` loads** — Mistral/Qwen/Phi-family GGUF files are
+  rejected today, even though they're structurally similar.
+- **Single-token forward pass only** — prefill is a sequential loop of single-token calls, not a
+  batched matmul. Fine for short prompts; for a long prompt this is the dominant cost (see the
+  KV-cache benchmark: ~29s for a ~1,900-token prompt + 32 decode tokens on the 135M model).
+- **Weights are copied, not zero-copy** — `LlamaWeights` materializes every tensor into a managed
+  `float[]` at load, ~2x memory versus the on-disk F16 size.
+
+### Path to running bigger HuggingFace models
+
+Yes — **GGUF**, matching llama.cpp/HuggingFace's own local-inference ecosystem, not ONNX or
+safetensors. Where each size class stands:
+
+- **Tiny models (≤ ~500M params): already possible today**, no code changes needed — point
+  `--model` at any **F16 (or F32) GGUF file of a Llama-architecture model** from HuggingFace (e.g.
+  a `bartowski/*-GGUF` repo's `-f16.gguf` file, when one is published alongside the quantized
+  variants). SmolLM2-135M-Instruct is the proof; SmolLM2-360M or TinyLlama-1.1B in F16 should work
+  unmodified, memory and CPU speed permitting.
+- **Medium models (roughly 1B–8B params): blocked mainly on one thing** — quantized tensor
+  dequantization. Almost every GGUF repo on HuggingFace above a few hundred million parameters
+  publishes Q4_K_M/Q5_K_M/Q6_K/Q8_0 as the practical download; full F16/F32 files for models that
+  size are large (a 7–8B model in F16 is 14–16 GB) and often not published at all. Q4_K/Q6_K/Q8_0
+  dequant math is already worked out in the GGUF research notes — implementing it (following the
+  same research → ADR → implementation → benchmark cycle the KV-cache work just went through) is
+  the natural next milestone, and the one that actually unlocks "download a model from HuggingFace
+  and run it" for anything beyond the current tiny test model. Zero-copy mmap reads and
+  multi-architecture support (Mistral/Qwen/Phi) would matter more at this size too, but are
+  secondary to quantization.
+
+This project has no sprint schedule or committed dates (see AGENTS.md's working style — small,
+reviewable steps, not a roadmap with deadlines), so the honest answer to "when" is "whenever the
+quantization ADR and implementation land," not a calendar date.
+
+See [docs/investigation/status.md](docs/investigation/status.md) for the investigation-phase
+history and [CHANGELOG.md](CHANGELOG.md) for the detailed change-by-change log.
 
 ## Project Docs
 

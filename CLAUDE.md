@@ -10,7 +10,8 @@ This project's ground rules (stack, `unsafe` policy, ADR process, working style)
     of writing ADRs freehand. Every ADR it writes or touches must end with a filled-in
     "Decision Log" table.
   - `csharp-dotnet` — C#/.NET implementation and review, enforcing the stack and `unsafe`
-    policy from AGENTS.md.
+    policy from AGENTS.md. Preloads the `csharp-conventions` skill (below) for per-project
+    detail. Never commits/pushes on its own initiative.
   - `test-writer-runner` — write, update, and run tests for any `InferenceEngine.*` project
     (one test project per `src/` project, business-case-documented). Use after implementing or
     changing behavior; always runs `dotnet test` and confirms it passes.
@@ -20,6 +21,9 @@ This project's ground rules (stack, `unsafe` policy, ADR process, working style)
   - `code-reader` — read and analyze external repos (dotLLM, LLamaSharp) to understand
     architecture and patterns. Not for writing code in our project.
 - All agents use context7 MCP for current library documentation.
-- No project-specific skills or hooks yet; add them under `.claude/skills/` and configure
-  hooks in `.claude/settings.json` as real, recurring needs show up — don't scaffold empty
-  ones speculatively.
+- Skills live in [.claude/skills/](.claude/skills/):
+  - `csharp-conventions` — per-project ownership/gotchas for `Core`/`Models`/`Tokenizers`/
+    `Engine`/`Cli`, the KV-cache contract, and the context7 requirement. Preloaded into
+    `csharp-dotnet`; also auto-discoverable when working with `.cs`/`.csproj` files generally.
+- No hooks yet; configure them in `.claude/settings.json` as real, recurring needs show up —
+  don't scaffold empty ones speculatively.
