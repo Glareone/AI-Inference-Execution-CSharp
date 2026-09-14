@@ -39,3 +39,28 @@ implementation logic:
 
 Note: `Ops` lives in a namespace literally named `Math` (shadowing `System.Math` once imported),
 so `OpsTests.cs` only ever uses `MathF` for scalar math to avoid the ambiguity.
+
+### `Llama/GoldenLogitBaselineTests` — golden KV-cache logit baseline
+
+A frozen-in-time correctness oracle captured against the pre-rewrite `SimpleKvCache`
+implementation, before the KV-cache rewrite in `docs/architecture/260914-kv-cache.md` begins:
+prefilling the real SmolLM2-135M-Instruct GGUF model with a fixed short prompt and a fixed long
+prompt (long enough to span several future 32-token cache blocks) always produces the identical
+next-token logit distribution, bit-for-bit. Every later step of the rewrite must reproduce the
+hardcoded `Fnv1a` hashes in that file exactly; the top-10 `(tokenId, logit)` pairs are captured
+alongside for human debuggability if a hash ever mismatches. `LogitHash.Fnv1a` (hashing raw
+IEEE-754 bit patterns, not decimal text) is written as a small reusable static method because a
+later end-to-end golden test, after the rewrite, needs to compute the same hash for comparison.
+
+Requires the real 270 MB model and is slow (a few seconds of real prefill), so it skips cleanly —
+not a failure — unless `INFERENCE_MODEL` is set to an existing GGUF file path:
+
+```
+INFERENCE_MODEL=~/.cache/inference-engine/models/SmolLM2-135M-Instruct-f16.gguf dotnet test ...
+```
+
+(with `~` already expanded by the shell). This is the only test in this project that references
+`InferenceEngine.Engine` in addition to `InferenceEngine.Models` — it needs
+`InferenceSession.PrefillTopLogits` (the exact code path `InferenceEngine.Cli`'s debug-logits
+flag drives) because the chat-template wrapping that produces the fixed 164-token long prompt is
+internal to `Engine` and can't be reconstructed from `Models` alone.

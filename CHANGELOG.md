@@ -91,6 +91,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `docs/scenarios/`: one Gherkin (`.feature`) file per `src/` project, documenting in plain
   Given/When/Then form the business scenarios the automated tests and manual CLI verification
   cover — plain specification files, not wired to a BDD execution framework.
+- `Llama/GoldenLogitBaselineTests` (`tests/InferenceEngine.Models.Tests/`): a golden correctness
+  oracle for the upcoming KV-cache rewrite. Prefills the real SmolLM2-135M-Instruct GGUF model
+  (via `InferenceSession.PrefillTopLogits`, the same path `--debug-logits` drives) for a short and
+  a multi-block-spanning long prompt, and hashes the full logit vector's raw IEEE-754 bit patterns
+  (`LogitHash.Fnv1a`, reusable by a later end-to-end golden test) with the hardcoded golden hashes
+  captured against the pre-rewrite `SimpleKvCache`. Skips cleanly (not a failure) unless
+  `INFERENCE_MODEL` points at an existing GGUF file.
 
 ### Fixed
 
