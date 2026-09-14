@@ -19,6 +19,9 @@ public sealed record GeneratedToken(int Id, string Text);
 /// </summary>
 public sealed class InferenceSession
 {
+    /// <summary>Tokens per physical KV-cache block — see the kv-cache ADR's block-size rationale.</summary>
+    private const int KvBlockSize = 32;
+
     private readonly IModel _model;
     private readonly ITokenizer _tokenizer;
     private readonly ChatMlTemplate _chatTemplate;
@@ -78,10 +81,11 @@ public sealed class InferenceSession
                 $"Prompt length {promptIds.Count} exceeds the model's max context ({Config.MaxSeqLen}).", nameof(promptIds));
         }
 
-        var kv = new SimpleKvCache(Config.NumLayers, promptIds.Count, Config.NumKvHeads, Config.HeadDim);
+        var kv = CreateKvCache(promptIds.Count);
         var logits = default(ReadOnlySpan<float>);
         for (var i = 0; i < promptIds.Count; i++)
         {
+            kv.Reserve(i);
             logits = _model.Forward(promptIds[i], i, kv, needLogits: i == promptIds.Count - 1);
         }
 
@@ -125,7 +129,7 @@ public sealed class InferenceSession
 
     private IEnumerable<GeneratedToken> GenerateCore(IReadOnlyList<int> promptIds, int sequenceLength, GenerationOptions options)
     {
-        var kv = new SimpleKvCache(Config.NumLayers, sequenceLength, Config.NumKvHeads, Config.HeadDim);
+        var kv = CreateKvCache(sequenceLength);
         var sampler = new SamplingPipeline(options, Config.VocabSize);
         var decoder = new IncrementalUtf8Decoder();
 
@@ -133,6 +137,7 @@ public sealed class InferenceSession
         var logits = default(ReadOnlySpan<float>);
         for (; position < promptIds.Count; position++)
         {
+            kv.Reserve(position);
             logits = _model.Forward(promptIds[position], position, kv, needLogits: position == promptIds.Count - 1);
         }
 
@@ -154,8 +159,21 @@ public sealed class InferenceSession
                 yield break;
             }
 
+            kv.Reserve(position);
             logits = _model.Forward(nextId, position, kv, needLogits: true);
             position++;
         }
+    }
+
+    /// <summary>
+    /// A block pool sized exactly to <paramref name="capacity"/> tokens (not yet
+    /// <see cref="ModelConfig.MaxSeqLen"/> — see the kv-cache ADR's later "lazy capacity sizing"
+    /// step) and a <see cref="PagedKvCache"/> over it.
+    /// </summary>
+    private PagedKvCache CreateKvCache(int capacity)
+    {
+        var maxBlocks = (capacity + KvBlockSize - 1) / KvBlockSize;
+        var pool = new KvBlockPool(Config.NumLayers, Config.NumKvHeads, Config.HeadDim, KvBlockSize, maxBlocks);
+        return new PagedKvCache(pool, Config.HeadDim, KvBlockSize, capacity);
     }
 }
