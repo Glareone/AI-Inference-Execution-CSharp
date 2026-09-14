@@ -36,6 +36,14 @@ public sealed class LlamaModel : IModel
 
     private LlamaModel(ModelConfig config, LlamaWeights weights)
     {
+        if (config.NumAttentionHeads % config.NumKvHeads != 0)
+        {
+            throw new NotSupportedException(
+                $"NumAttentionHeads ({config.NumAttentionHeads}) must be an exact multiple of " +
+                $"NumKvHeads ({config.NumKvHeads}) for grouped-query attention — an inexact " +
+                "ratio would silently truncate the query-head group size.");
+        }
+
         Config = config;
         _weights = weights;
         _qDim = config.NumAttentionHeads * config.HeadDim;
@@ -100,7 +108,6 @@ public sealed class LlamaModel : IModel
         }
 
         var hiddenSize = Config.HiddenSize;
-        var groupSize = Config.NumAttentionHeads / Config.NumKvHeads;
 
         _weights.TokenEmbedding.AsSpan(tokenId * hiddenSize, hiddenSize).CopyTo(_hidden);
 
@@ -119,30 +126,9 @@ public sealed class LlamaModel : IModel
             Ops.Rope(_q, Config.NumAttentionHeads, Config.HeadDim, position, Config.RopeFreqBase);
             Ops.Rope(kSlot, Config.NumKvHeads, Config.HeadDim, position, Config.RopeFreqBase);
 
-            var contextLength = position + 1;
-            for (var qh = 0; qh < Config.NumAttentionHeads; qh++)
-            {
-                var kvh = qh / groupSize;
-                var qHead = _q.AsSpan(qh * Config.HeadDim, Config.HeadDim);
-
-                for (var t = 0; t < contextLength; t++)
-                {
-                    var kHead = kvCache.Key(layer, t).Slice(kvh * Config.HeadDim, Config.HeadDim);
-                    _scores[t] = TensorPrimitives.Dot(qHead, kHead) * _attentionScale;
-                }
-
-                var scores = _scores.AsSpan(0, contextLength);
-                var probs = _probs.AsSpan(0, contextLength);
-                Ops.Softmax(scores, probs);
-
-                var outHead = _attnOut.AsSpan(qh * Config.HeadDim, Config.HeadDim);
-                outHead.Clear();
-                for (var t = 0; t < contextLength; t++)
-                {
-                    var vHead = kvCache.Value(layer, t).Slice(kvh * Config.HeadDim, Config.HeadDim);
-                    TensorPrimitives.MultiplyAdd(vHead, probs[t], outHead, outHead);
-                }
-            }
+            GqaAttention.Attend(
+                kvCache, layer, position, _q, Config.NumAttentionHeads, Config.NumKvHeads,
+                Config.HeadDim, _attentionScale, _scores, _probs, _attnOut);
 
             Ops.MatVec(lw.AttnOutput, hiddenSize, _qDim, _attnOut, _attnProjected);
             TensorPrimitives.Add(_hidden, _attnProjected, _hidden);
