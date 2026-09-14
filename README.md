@@ -184,16 +184,19 @@ safetensors. Where each size class stands:
 - **Tiny models (≤ ~500M params): already possible today**, no code changes needed — point
   `--model` at any **F16 (or F32) GGUF file of a Llama-architecture model** from HuggingFace (e.g.
   a `bartowski/*-GGUF` repo's `-f16.gguf` file, when one is published alongside the quantized
-  variants). SmolLM2-135M-Instruct is the proof; SmolLM2-360M or TinyLlama-1.1B in F16 should work
-  unmodified, memory and CPU speed permitting.
+  variants). SmolLM2-135M-Instruct is the proof; SmolLM2-360M in F16 should work unmodified,
+  memory and CPU speed permitting.
 - **Medium models (roughly 1B–8B params): blocked mainly on one thing** — quantized tensor
-  dequantization. Almost every GGUF repo on HuggingFace above a few hundred million parameters
-  publishes Q4_K_M/Q5_K_M/Q6_K/Q8_0 as the practical download; full F16/F32 files for models that
-  size are large (a 7–8B model in F16 is 14–16 GB) and often not published at all. Q4_K/Q6_K/Q8_0
-  dequant math is already worked out in the GGUF research notes — implementing it (following the
-  same research → ADR → implementation → benchmark cycle the KV-cache work just went through) is
-  the natural next milestone, and the one that actually unlocks "download a model from HuggingFace
-  and run it" for anything beyond the current tiny test model. Zero-copy mmap reads and
+  dequantization. TinyLlama-1.1B is the practical edge case here: an F16 GGUF of it would already
+  load today (same "already possible" mechanism as the tiny models above, just at ~2.2 GB instead
+  of a few hundred MB), but almost every GGUF repo on HuggingFace above a few hundred million
+  parameters publishes Q4_K_M/Q5_K_M/Q6_K/Q8_0 as the practical download rather than F16; full
+  F16/F32 files for a 7–8B model specifically are large (14–16 GB) and often not published at all.
+  Q4_K/Q6_K/Q8_0 dequant math is already worked out in the GGUF research notes — implementing it
+  (following the same research → ADR → implementation → benchmark cycle the KV-cache work just
+  went through) is the natural next milestone, and the one that actually unlocks "download a
+  model from HuggingFace and run it" for anything beyond the current tiny test model. Zero-copy
+  mmap reads and
   multi-architecture support (Mistral/Qwen/Phi) would matter more at this size too, but are
   secondary to quantization.
 

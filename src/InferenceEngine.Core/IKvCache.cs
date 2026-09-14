@@ -59,6 +59,10 @@ public interface IKvCache
     /// session reuse and speculative-decoding rollback — see the kv-cache ADR's Consequences;
     /// neither this nor <see cref="Reset"/> has a production caller yet.
     /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// <paramref name="toPosition"/> is negative or greater than <see cref="Length"/> — either
+    /// would leave <see cref="Length"/> claiming a resident range that was never actually reserved.
+    /// </exception>
     void Rollback(int toPosition);
 }
 

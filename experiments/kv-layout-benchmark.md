@@ -96,12 +96,15 @@ growth instead of `SimpleKvCache`'s always-exact-but-never-growable sizing.
 
 ## Observations
 
-1. **The loop reorder is the whole story, as predicted.** The ADR explicitly warned that a bundled
-   "paged KV cache is Nx faster" claim would misattribute the loop-reorder's win to paging. Measured
-   here: ~24% faster at long context, ~0% (within noise) at short context — exactly the shape a
-   bandwidth-bound change targeting KV traffic (which only matters at longer contexts) predicts, and
-   paging itself is architecturally incapable of contributing a DRAM-traffic win for a single sequence
-   (see the ADR's Consequences).
+1. **The loop reorder is an expected contributor; this comparison does not isolate its share of
+   the speedup.** The before/after commits span all three changes (loop reorder, head-major
+   layout, paging), so the ~24% at long context and ~0% at short context can't be attributed to
+   any one of them from this measurement alone. What the shape *is* consistent with: a
+   bandwidth-bound change targeting KV traffic (which only matters at longer contexts), and the
+   ADR's independent estimate that the loop reorder accounts for nearly all of it while paging is
+   architecturally incapable of contributing a DRAM-traffic win for a single sequence (see the
+   ADR's Consequences) — but confirming that split would need the three changes measured
+   separately, which this benchmark doesn't do.
 2. **The `--stats` metric is not a clean decode-only number**, and that's fine here — see Method
    above. A future benchmark that wants to isolate decode-at-fixed-context would need a CLI flag to
    seed a cache with a prefix without timing the prefill, which doesn't exist yet and wasn't worth

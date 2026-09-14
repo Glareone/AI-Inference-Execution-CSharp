@@ -1,14 +1,10 @@
 namespace InferenceEngine.Models.Tests.Llama;
 
 /// <summary>
-/// Bit-exact FNV-1a hash of a logits vector, used to freeze a "golden" forward-pass output for
-/// later regression comparison. Hashes the raw IEEE-754 bit pattern of every float
-/// (<see cref="BitConverter.SingleToInt32Bits(float)"/>), not its decimal text representation —
-/// two floats that print identically can still differ in their low mantissa bits, and this hash
-/// is deliberately sensitive to that, because the whole point is catching numeric drift a
-/// KV-cache rewrite must not introduce. Kept as a small reusable static method (rather than
-/// inlined in one test) because a later end-to-end golden test, after the KV-cache rewrite, needs
-/// to compute the exact same hash to compare against.
+/// Hashes raw bit patterns, not decimal text, because two floats that print identically can
+/// still differ in their low mantissa bits — the whole point is catching numeric drift a
+/// KV-cache rewrite must not introduce. A reusable static method, not inlined in one test,
+/// because a later end-to-end golden test needs to compute the exact same hash to compare against.
 /// </summary>
 internal static class LogitHash
 {
@@ -30,6 +26,13 @@ internal static class LogitHash
         return hash;
     }
 
+    /// <summary>
+    /// One FNV-1a mixing step: XOR the byte into the hash, then multiply by the FNV prime — in
+    /// that order. The order is what makes this FNV-1a rather than the original FNV-1 (which
+    /// multiplies first and XORs after); the two produce different, non-interchangeable hashes,
+    /// so swapping the order here would silently invalidate every hash already on record
+    /// (<see cref="GoldenLogitBaselineTests"/>'s hardcoded constants).
+    /// </summary>
     private static ulong HashByte(ulong hash, byte b)
     {
         hash ^= b;

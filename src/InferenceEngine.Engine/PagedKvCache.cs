@@ -18,12 +18,16 @@ internal sealed class PagedKvCache : IKvCache
     private readonly int _blockSizeLog2;
     private readonly int _blockSizeMask;
 
+    /// <inheritdoc/>
     public int BlockSize { get; }
 
+    /// <inheritdoc/>
     public int HeadDim { get; }
 
+    /// <inheritdoc/>
     public int Capacity { get; }
 
+    /// <inheritdoc/>
     public int Length { get; private set; }
 
     public PagedKvCache(KvBlockPool pool, int headDim, int blockSize, int capacity)
@@ -45,6 +49,7 @@ internal sealed class PagedKvCache : IKvCache
         Array.Fill(_blockTable, -1);
     }
 
+    /// <inheritdoc/>
     public void Reserve(int position)
     {
         if (position < 0 || position >= Capacity)
@@ -65,34 +70,50 @@ internal sealed class PagedKvCache : IKvCache
         }
     }
 
+    /// <inheritdoc/>
     public Span<float> KeySlot(int layer, int kvHead, int position)
     {
         var (blockId, slot) = Locate(position);
         return _pool.KeyStore(blockId).AsSpan(_pool.Offset(layer, kvHead, slot), HeadDim);
     }
 
+    /// <inheritdoc/>
     public Span<float> ValueSlot(int layer, int kvHead, int position)
     {
         var (blockId, slot) = Locate(position);
         return _pool.ValueStore(blockId).AsSpan(_pool.Offset(layer, kvHead, slot), HeadDim);
     }
 
+    /// <inheritdoc/>
     public ReadOnlySpan<float> KeyBlockForHead(int layer, int kvHead, int logicalBlock, int count)
     {
         var blockId = BlockIdOf(logicalBlock);
         return _pool.KeyStore(blockId).AsSpan(_pool.Offset(layer, kvHead, 0), count * HeadDim);
     }
 
+    /// <inheritdoc/>
     public ReadOnlySpan<float> ValueBlockForHead(int layer, int kvHead, int logicalBlock, int count)
     {
         var blockId = BlockIdOf(logicalBlock);
         return _pool.ValueStore(blockId).AsSpan(_pool.Offset(layer, kvHead, 0), count * HeadDim);
     }
 
+    /// <inheritdoc/>
     public void Reset() => Rollback(0);
 
+    /// <inheritdoc/>
     public void Rollback(int toPosition)
     {
+        // A target outside [0, Length] would either mark never-written positions as resident
+        // (toPosition > Length) or free the whole cache while reporting a nonsensical negative
+        // Length (toPosition < 0) — both are caller bugs to reject up front, not states to limp
+        // through silently.
+        if (toPosition < 0 || toPosition > Length)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(toPosition), toPosition, $"toPosition must be within [0, {Length}].");
+        }
+
         var keepBlocks = toPosition == 0 ? 0 : ((toPosition - 1) >> _blockSizeLog2) + 1;
         for (var i = keepBlocks; i < _blockTable.Length; i++)
         {

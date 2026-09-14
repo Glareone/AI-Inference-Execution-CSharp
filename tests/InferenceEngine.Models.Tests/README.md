@@ -68,7 +68,7 @@ future rewrite can compute the same hash for comparison.
 Requires the real 270 MB model and is slow (a few seconds of real prefill), so it skips cleanly —
 not a failure — unless `INFERENCE_MODEL` is set to an existing GGUF file path:
 
-```
+```sh
 INFERENCE_MODEL=~/.cache/inference-engine/models/SmolLM2-135M-Instruct-f16.gguf dotnet test ...
 ```
 

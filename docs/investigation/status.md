@@ -6,8 +6,9 @@
   Engine, Cli — mirroring a scoped-down dotLLM structure. Builds and runs.
 - **Shared build props**: `Directory.Build.props` sets nullable, implicit usings, and language
   version so individual `.csproj` files stay minimal.
-- **CLI entry point**: `InferenceEngine.Cli` wires the layers together; currently a stub
-  (`Program.cs`) that compiles and runs but does no real work yet.
+- **CLI entry point**: `InferenceEngine.Cli` wires the layers together end-to-end — loads a GGUF
+  model, tokenizes, generates, and streams output. See the [README](../../README.md#status) for
+  current status and test coverage.
 - **Architecture decisions**: MADR template and the solution-layout ADR (project layout) in `docs/architecture/`.
 - **Agentic workflow**: AGENTS.md ground rules, CLAUDE.md with Claude Code subagents
   (ADR writer/reviewer, C#/.NET implementation agent).
@@ -24,10 +25,11 @@
 
 ## What's next
 
-Seven placeholder ADRs now exist (`Status: planned`), one per component challenge from the
+Seven placeholder ADRs were created (`Status: planned`), one per component challenge from the
 [project-challenges ADR](../architecture/260901-project-challenges-and-how-to-address-them.md).
 Each carries its owning project and build-vs-reuse stance; the MADR body is filled in — and the
-file renamed to `YYMMDD-<slug>.md` — when its round comes.
+file renamed to `YYMMDD-<slug>.md` — when its round comes. One (KV-cache) has been written up;
+six remain as placeholders below, several already implemented in code ahead of their ADR.
 
 1. **[Model format loading](../architecture/planned-format-loading.md)** — placeholder created;
    to fill: GGUF vs. SafeTensors and the parsing library. (Format research done — see below.)
@@ -43,11 +45,12 @@ file renamed to `YYMMDD-<slug>.md` — when its round comes.
    placeholder created; to fill: download library, cache layout, resume/verify behavior.
 7. **[Performance baseline](../architecture/planned-performance-baseline.md)** — placeholder
    created; to fill: tokens/s targets, managed vs. `unsafe`, SIMD.
-8. **Core abstractions** — define `IModel`, `ITokenizer`, tensor/config types in
-   `InferenceEngine.Core` once ADR decisions inform the interfaces.
-9. **Generation loop** — implement sampling and KV-cache in `InferenceEngine.Engine`,
-   wired through CLI for end-to-end token generation.
-10. **Serving** (later) — OpenAI-compatible HTTP endpoint.
+8. **Core abstractions** — done: `IModel`, `ITokenizer`, `IKvCache`, `ModelConfig` in
+   `InferenceEngine.Core`.
+9. **Generation loop** — done: sampling and the paged KV-cache are implemented in
+   `InferenceEngine.Engine`, wired through the CLI for end-to-end token generation. See the
+   [README](../../README.md#status).
+10. **Serving** (later) — OpenAI-compatible HTTP endpoint. Not started.
 
 ## Investigation Documents
 

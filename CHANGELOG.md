@@ -246,6 +246,43 @@ non-GGUF file now reports a clean error instead of a stack trace, and a comma-de
 `--temperature` is cleanly rejected. Clean build (0 warnings/errors, Debug + Release, wiped
 `bin`/`obj`).
 
+CodeRabbit review findings on the KV-cache-rewrite PR:
+
+- `PagedKvCache.Rollback` now rejects a `toPosition` outside `[0, Length]` with
+  `ArgumentOutOfRangeException` instead of silently corrupting state — a negative target froze
+  `Length` at a nonsensical negative value, and a target past `Length` marked never-written
+  positions as resident. Two new tests cover both directions; `IKvCache.Rollback`'s doc comment
+  now states the contract.
+- `PagedKvCacheTests`' rollback test wrote and re-read a sentinel at a position inside the
+  partially-retained block instead of only re-reading a default-valued position — the previous
+  assertion (`0f == 0f`) would have passed even if that block had been wrongly freed.
+- `docs/investigation/status.md` no longer contradicts itself: the CLI-is-a-stub and
+  generation-loop-is-future-work bullets were still there next to the new KV-cache-done entry.
+  Updated to match the actual end-to-end state.
+- `experiments/kv-layout-benchmark.md`'s observation "the loop reorder is the whole story" is not
+  something the before/after commits can establish — they bundle the loop reorder, head-major
+  layout, and paging together, so no single change's share of the measured speedup is isolated.
+  Reworded to say what the measurement actually shows (consistent with a bandwidth-bound change)
+  versus what it can't (attribution to one of the three).
+- `README.md`'s "tiny models" bound (≤ ~500M params) listed TinyLlama-1.1B as an example, which is
+  more than double that bound. Moved it to the medium-model bullet, where it actually belongs, and
+  noted it's the boundary case an F16 GGUF would already load.
+- Two markdownlint MD040 fixes (missing fence language) and one WHAT-vs-WHY trim on
+  `LogitHash`'s class doc, matching this repo's established comment policy.
+- Same Docstring Coverage pre-merge check as `6ae9b9b`, same resolution: the 80% threshold is a
+  generic default this repo hasn't opted into, and it conflicts with `.coderabbit.yaml`'s own
+  `**/*.cs` policy ("no WHAT comments, only WHY when non-obvious"). Added `<inheritdoc/>` to every
+  `PagedKvCache` member implementing an already-documented `IKvCache` member (`BlockSize`,
+  `HeadDim`, `Capacity`, `Length`, `Reserve`, `KeySlot`, `ValueSlot`, `KeyBlockForHead`,
+  `ValueBlockForHead`, `Reset`, `Rollback`) instead of restating their docs — the actual gap was
+  that the interface's existing documentation wasn't surfaced on the implementation, not that the
+  behavior was undocumented. Left the trivial one-line accessors on `KvBlockPool`
+  (`KeyStore`/`ValueStore`/`HeadDim`/`NumLayers`) undocumented, same as before — self-explanatory,
+  not a real gap.
+
+Verified: `dotnet build` (0 warnings/errors) and `dotnet test` (99/99, up from 97 — the two new
+`Rollback` validation tests) both pass.
+
 ### Changed
 
 - Moved `architecture/`, `investigation/`, and `scenarios/` under a new `docs/` folder

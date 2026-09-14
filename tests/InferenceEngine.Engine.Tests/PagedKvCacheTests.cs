@@ -126,13 +126,20 @@ public class PagedKvCacheTests
             cache.Reserve(position);
         }
 
+        // Sentinel in logical block 1 (positions 2-3) -- written before Rollback so a mismatch
+        // after Rollback proves block 1 was wrongly freed, not just "position 0 still reads 0f"
+        // (which default-valued arrays would satisfy even if block 1 had been freed).
+        cache.KeySlot(0, 0, 2)[0] = 42f;
+
         // Rollback(3): keep positions [0,3) -> logical block 0 (positions 0-1) and logical block
         // 1 (positions 2-3, since position 2 < 3) are kept; blocks 2 and 3 must be freed.
         cache.Rollback(3);
         Assert.Equal(3, cache.Length);
 
-        // The kept block's data must survive the rollback untouched.
+        // The kept blocks' data must survive the rollback untouched, including the partially
+        // retained block 1 (position 3 is beyond toPosition but its physical block is kept).
         Assert.Equal(0f, cache.KeySlot(0, 0, 0)[0]);
+        Assert.Equal(42f, cache.KeySlot(0, 0, 2)[0]);
 
         // The two freed physical blocks must be available again -- reserving two new logical
         // blocks (2 and 3, covering positions 4-5 and 6-7) must succeed without exhausting the
@@ -168,5 +175,25 @@ public class PagedKvCacheTests
 
         var ex = Assert.Throws<InvalidOperationException>(() => cache.Reserve(4));
         Assert.Contains("2", ex.Message);
+    }
+
+    [Fact]
+    public void Rollback_RejectsNegativeTarget()
+    {
+        var cache = MakeCache(capacity: 8, blockSize: 2, maxBlocks: 4);
+        cache.Reserve(0);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => cache.Rollback(-1));
+    }
+
+    [Fact]
+    public void Rollback_RejectsTargetBeyondLength()
+    {
+        // Length is 2 (one position reserved -> Reserve(1) makes Length = 2); a target past that
+        // would mark never-written positions as resident instead of being rejected.
+        var cache = MakeCache(capacity: 8, blockSize: 2, maxBlocks: 4);
+        cache.Reserve(1);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => cache.Rollback(5));
     }
 }
