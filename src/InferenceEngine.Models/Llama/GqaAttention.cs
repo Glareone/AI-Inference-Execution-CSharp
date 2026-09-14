@@ -16,7 +16,13 @@ internal static class GqaAttention
     /// Computes attention output for every query head into <paramref name="attnOut"/>. <paramref
     /// name="q"/> is <c>numQHeads * headDim</c> floats (already RoPE'd); the KV cache is assumed
     /// already RoPE'd and written for <paramref name="position"/>. <paramref name="scores"/>/
-    /// <paramref name="probs"/> are scratch spans at least <c>position + 1</c> floats long.
+    /// <paramref name="probs"/> are scratch spans at least <c>groupSize * scoreStride</c> floats
+    /// long, where <paramref name="scoreStride"/> is at least <c>position + 1</c> — one
+    /// contiguous lane per query head sharing a KV head, so all <c>groupSize</c> heads' scores
+    /// for one KV-head tile can be computed before moving to the next KV head (see the kv-cache
+    /// ADR's loop-reorder rationale: this outer-KV-head-inner-query-heads nesting reads each
+    /// KV-head row once and reuses it across the <c>groupSize</c> query heads that share it,
+    /// instead of re-reading it once per query head).
     /// </summary>
     public static void Attend(
         IKvCache kvCache,
@@ -27,6 +33,7 @@ internal static class GqaAttention
         int numKvHeads,
         int headDim,
         float scale,
+        int scoreStride,
         Span<float> scores,
         Span<float> probs,
         Span<float> attnOut)
@@ -34,27 +41,39 @@ internal static class GqaAttention
         var groupSize = numQHeads / numKvHeads;
         var contextLength = position + 1;
 
-        for (var qh = 0; qh < numQHeads; qh++)
+        for (var kvh = 0; kvh < numKvHeads; kvh++)
         {
-            var kvh = qh / groupSize;
-            var qHead = q.Slice(qh * headDim, headDim);
+            var qBase = kvh * groupSize;
 
+            // pass 1: scores for all groupSize query heads sharing this KV head.
             for (var t = 0; t < contextLength; t++)
             {
                 var kHead = kvCache.Key(layer, t).Slice(kvh * headDim, headDim);
-                scores[t] = TensorPrimitives.Dot(qHead, kHead) * scale;
+                for (var g = 0; g < groupSize; g++)
+                {
+                    var qHead = q.Slice((qBase + g) * headDim, headDim);
+                    scores[(g * scoreStride) + t] = TensorPrimitives.Dot(qHead, kHead) * scale;
+                }
             }
 
-            var scoresSlice = scores[..contextLength];
-            var probsSlice = probs[..contextLength];
-            Ops.Softmax(scoresSlice, probsSlice);
+            for (var g = 0; g < groupSize; g++)
+            {
+                Ops.Softmax(
+                    scores.Slice(g * scoreStride, contextLength),
+                    probs.Slice(g * scoreStride, contextLength));
+                attnOut.Slice((qBase + g) * headDim, headDim).Clear();
+            }
 
-            var outHead = attnOut.Slice(qh * headDim, headDim);
-            outHead.Clear();
+            // pass 2: V-weighted accumulation, t ascending — float addition isn't associative, so
+            // this order must match the original query-head-outermost loop exactly.
             for (var t = 0; t < contextLength; t++)
             {
                 var vHead = kvCache.Value(layer, t).Slice(kvh * headDim, headDim);
-                TensorPrimitives.MultiplyAdd(vHead, probsSlice[t], outHead, outHead);
+                for (var g = 0; g < groupSize; g++)
+                {
+                    var outHead = attnOut.Slice((qBase + g) * headDim, headDim);
+                    TensorPrimitives.MultiplyAdd(vHead, probs[(g * scoreStride) + t], outHead, outHead);
+                }
             }
         }
     }

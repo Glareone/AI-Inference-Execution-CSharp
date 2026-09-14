@@ -48,10 +48,42 @@ public class GqaAttentionTests
         ReferenceAttend(cache, contextLength, q, expected);
 
         var actual = new float[QDim];
-        var scores = new float[contextLength];
-        var probs = new float[contextLength];
+        var scores = new float[GroupSize * contextLength];
+        var probs = new float[GroupSize * contextLength];
         GqaAttention.Attend(
-            cache, Layer, position, q, NumQHeads, NumKvHeads, HeadDim, Scale, scores, probs, actual);
+            cache, Layer, position, q, NumQHeads, NumKvHeads, HeadDim, Scale, contextLength,
+            scores, probs, actual);
+
+        for (var i = 0; i < QDim; i++)
+        {
+            Assert.Equal(expected[i], actual[i]);
+        }
+    }
+
+    [Fact]
+    public void Attend_WithScoreStrideLargerThanContextLength_MatchesReference()
+    {
+        // Production sizes scores/probs to groupSize * MaxSeqLen and passes MaxSeqLen as the
+        // stride regardless of the actual (shorter) context length — this test exercises that
+        // "stride > contextLength" shape directly, since the per-lane theory test above always
+        // used stride == contextLength.
+        const int contextLength = 40;
+        const int scoreStride = 128;
+        var position = contextLength - 1;
+        var rng = new Random(42);
+
+        var q = RandomVector(rng, QDim);
+        var cache = BuildFakeCache(rng, contextLength);
+
+        var expected = new float[QDim];
+        ReferenceAttend(cache, contextLength, q, expected);
+
+        var actual = new float[QDim];
+        var scores = new float[GroupSize * scoreStride];
+        var probs = new float[GroupSize * scoreStride];
+        GqaAttention.Attend(
+            cache, Layer, position, q, NumQHeads, NumKvHeads, HeadDim, Scale, scoreStride,
+            scores, probs, actual);
 
         for (var i = 0; i < QDim; i++)
         {

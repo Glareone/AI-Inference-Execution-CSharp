@@ -17,6 +17,7 @@ public sealed class LlamaModel : IModel
     private readonly int _qDim;
     private readonly int _kvDim;
     private readonly float _attentionScale;
+    private readonly int _scoreStride;
 
     // Scratch buffers, allocated once so a decode step does no heap allocation.
     private readonly float[] _hidden;
@@ -50,6 +51,9 @@ public sealed class LlamaModel : IModel
         _kvDim = config.NumKvHeads * config.HeadDim;
         _attentionScale = 1f / MathF.Sqrt(config.HeadDim);
 
+        var groupSize = config.NumAttentionHeads / config.NumKvHeads;
+        _scoreStride = config.MaxSeqLen;
+
         _hidden = new float[config.HiddenSize];
         _normed = new float[config.HiddenSize];
         _q = new float[_qDim];
@@ -59,8 +63,8 @@ public sealed class LlamaModel : IModel
         _ffnUp = new float[config.FfnHiddenSize];
         _ffnSilu = new float[config.FfnHiddenSize];
         _ffnDown = new float[config.HiddenSize];
-        _scores = new float[config.MaxSeqLen];
-        _probs = new float[config.MaxSeqLen];
+        _scores = new float[groupSize * _scoreStride];
+        _probs = new float[groupSize * _scoreStride];
         _logits = new float[config.VocabSize];
     }
 
@@ -128,7 +132,7 @@ public sealed class LlamaModel : IModel
 
             GqaAttention.Attend(
                 kvCache, layer, position, _q, Config.NumAttentionHeads, Config.NumKvHeads,
-                Config.HeadDim, _attentionScale, _scores, _probs, _attnOut);
+                Config.HeadDim, _attentionScale, _scoreStride, _scores, _probs, _attnOut);
 
             Ops.MatVec(lw.AttnOutput, hiddenSize, _qDim, _attnOut, _attnProjected);
             TensorPrimitives.Add(_hidden, _attnProjected, _hidden);
