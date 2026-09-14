@@ -132,20 +132,25 @@ public sealed class LlamaModel : IModel
 
             Ops.RmsNorm(_hidden, lw.AttnNorm, Config.RmsNormEps, _normed);
 
-            var kSlot = kvCache.KeySlot(layer, position);
-            var vSlot = kvCache.ValueSlot(layer, position);
             Ops.MatVec(lw.AttnQ, _qDim, hiddenSize, _normed, _q);
-            Ops.MatVec(lw.AttnK, _kvDim, hiddenSize, _normed, kSlot);
-            Ops.MatVec(lw.AttnV, _kvDim, hiddenSize, _normed, vSlot);
-
             for (var h = 0; h < Config.NumAttentionHeads; h++)
             {
                 Ops.RopeHead(_q.AsSpan(h * headDim, headDim), _ropeCos, _ropeSin);
             }
 
-            for (var h = 0; h < Config.NumKvHeads; h++)
+            // Per-KV-head write + RoPE, not one packed kvDim-wide MatVec/Rope call: the
+            // head-major cache exposes one head's slot at a time. Each head's row range
+            // [kvh*headDim, (kvh+1)*headDim) of AttnK/AttnV produces the identical dot products,
+            // in the identical row order (0..kvDim), as the original single packed call — just
+            // split at head boundaries — so this is bit-identical, not a numeric change.
+            for (var kvh = 0; kvh < Config.NumKvHeads; kvh++)
             {
-                Ops.RopeHead(kSlot.Slice(h * headDim, headDim), _ropeCos, _ropeSin);
+                var kSlot = kvCache.KeySlot(layer, kvh, position);
+                var vSlot = kvCache.ValueSlot(layer, kvh, position);
+                var rowOffset = kvh * headDim * hiddenSize;
+                Ops.MatVec(lw.AttnK.AsSpan(rowOffset, headDim * hiddenSize), headDim, hiddenSize, _normed, kSlot);
+                Ops.MatVec(lw.AttnV.AsSpan(rowOffset, headDim * hiddenSize), headDim, hiddenSize, _normed, vSlot);
+                Ops.RopeHead(kSlot, _ropeCos, _ropeSin);
             }
 
             GqaAttention.Attend(

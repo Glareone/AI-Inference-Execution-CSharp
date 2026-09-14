@@ -5,15 +5,16 @@ using InferenceEngine.Models.Llama;
 namespace InferenceEngine.Models.Tests.Llama;
 
 /// <summary>
-/// Business case: <see cref="GqaAttention.Attend"/> was extracted verbatim from
+/// Business case: <see cref="GqaAttention.Attend"/> was extracted from
 /// <c>LlamaModel.Forward</c>'s attention block (see <c>docs/architecture/260914-kv-cache.md</c>)
 /// and must keep computing exactly the same floating-point values in exactly the same
-/// accumulation order as the original — any later loop-reorder or layout change in
+/// accumulation order as the original — any loop-reorder or layout change in
 /// <c>GqaAttention</c> has to keep matching this independent transcription of the original
 /// attention math, not just "look equivalent". The reference implementation below is
-/// transcribed directly from the pre-extraction <c>LlamaModel.cs</c> attention block, not by
-/// calling <c>GqaAttention</c>, so a bug introduced during extraction can't hide from both sides
-/// of the comparison at once.
+/// transcribed directly from the pre-extraction <c>LlamaModel.cs</c> attention block (adapted
+/// only to address the head-major cache per-KV-head, per-position, rather than a since-deleted
+/// per-layer packed row), not by calling <c>GqaAttention</c>, so a bug introduced during
+/// extraction can't hide from both sides of the comparison at once.
 /// </summary>
 public class GqaAttentionTests
 {
@@ -21,7 +22,6 @@ public class GqaAttentionTests
     private const int GroupSize = 3;
     private const int NumQHeads = NumKvHeads * GroupSize;
     private const int HeadDim = 64;
-    private const int KvDim = NumKvHeads * HeadDim;
     private const int QDim = NumQHeads * HeadDim;
     private const int Layer = 0;
     private const float Scale = 0.125f;
@@ -102,24 +102,27 @@ public class GqaAttentionTests
         return vec;
     }
 
-    private static TokenMajorFakeKvCache BuildFakeCache(Random rng, int contextLength)
+    private static HeadMajorFakeKvCache BuildFakeCache(Random rng, int contextLength)
     {
-        var cache = new TokenMajorFakeKvCache(contextLength, KvDim);
+        var cache = new HeadMajorFakeKvCache(contextLength, NumKvHeads, HeadDim);
         for (var t = 0; t < contextLength; t++)
         {
-            var k = RandomVector(rng, KvDim);
-            var v = RandomVector(rng, KvDim);
-            k.CopyTo(cache.KeySlot(Layer, t));
-            v.CopyTo(cache.ValueSlot(Layer, t));
+            for (var kvh = 0; kvh < NumKvHeads; kvh++)
+            {
+                var k = RandomVector(rng, HeadDim);
+                var v = RandomVector(rng, HeadDim);
+                k.CopyTo(cache.KeySlot(Layer, kvh, t));
+                v.CopyTo(cache.ValueSlot(Layer, kvh, t));
+            }
         }
 
         return cache;
     }
 
     /// <summary>
-    /// Verbatim transcription of the attention block that lived in <c>LlamaModel.Forward</c>
-    /// before extraction (query-head-outermost loop, per-position row accessors) — deliberately
-    /// NOT calling <see cref="GqaAttention"/>, so this is an independent oracle.
+    /// Transcription of the attention block's math (query-head-outermost loop, per-(kvHead,
+    /// position) slot accessors) — deliberately NOT calling <see cref="GqaAttention"/>, so this
+    /// is an independent oracle.
     /// </summary>
     private static void ReferenceAttend(
         IKvCache kvCache, int contextLength, ReadOnlySpan<float> q, Span<float> attnOut)
@@ -134,7 +137,7 @@ public class GqaAttentionTests
 
             for (var t = 0; t < contextLength; t++)
             {
-                var kHead = kvCache.Key(Layer, t).Slice(kvh * HeadDim, HeadDim);
+                var kHead = kvCache.KeySlot(Layer, kvh, t);
                 scores[t] = TensorPrimitives.Dot(qHead, kHead) * Scale;
             }
 
@@ -146,40 +149,63 @@ public class GqaAttentionTests
             outHead.Clear();
             for (var t = 0; t < contextLength; t++)
             {
-                var vHead = kvCache.Value(Layer, t).Slice(kvh * HeadDim, HeadDim);
+                var vHead = kvCache.ValueSlot(Layer, kvh, t);
                 TensorPrimitives.MultiplyAdd(vHead, probsSpan[t], outHead, outHead);
             }
         }
     }
 
     /// <summary>
-    /// Local, minimal <see cref="IKvCache"/> test double matching what <c>SimpleKvCache</c> does
-    /// today (token-major, one flat array per layer) — this test project can't see
-    /// <c>InferenceEngine.Engine</c>'s internal <c>SimpleKvCache</c> type, and this step predates
-    /// the paged/head-major cache the later steps introduce.
+    /// Local, minimal <see cref="IKvCache"/> test double matching <c>SimpleKvCache</c>'s
+    /// head-major shape (<c>[kvHead][position][headDim]</c> per layer) — this test project can't
+    /// see <c>InferenceEngine.Engine</c>'s internal <c>SimpleKvCache</c> type. Block size fixed at
+    /// 32 to match the ADR; <see cref="Reserve"/>/<see cref="Reset"/>/<see cref="Rollback"/> are
+    /// unused by these tests (GqaAttention never calls them) and implemented minimally.
     /// </summary>
-    private sealed class TokenMajorFakeKvCache : IKvCache
+    private sealed class HeadMajorFakeKvCache : IKvCache
     {
         private readonly float[] _keys;
         private readonly float[] _values;
-        private readonly int _kvDim;
+        private readonly int _capacity;
 
-        public int Length { get; }
+        public int BlockSize => 32;
 
-        public TokenMajorFakeKvCache(int numTokens, int kvDim)
+        public int HeadDim { get; }
+
+        public int Capacity => _capacity;
+
+        public int Length { get; private set; }
+
+        public HeadMajorFakeKvCache(int capacity, int numKvHeads, int headDim)
         {
-            Length = numTokens;
-            _kvDim = kvDim;
-            _keys = new float[numTokens * kvDim];
-            _values = new float[numTokens * kvDim];
+            _capacity = capacity;
+            HeadDim = headDim;
+            Length = capacity;
+            var headStride = capacity * headDim;
+            _keys = new float[numKvHeads * headStride];
+            _values = new float[numKvHeads * headStride];
         }
 
-        public Span<float> KeySlot(int layer, int position) => _keys.AsSpan(position * _kvDim, _kvDim);
+        public void Reserve(int position) => Length = System.Math.Max(Length, position + 1);
 
-        public Span<float> ValueSlot(int layer, int position) => _values.AsSpan(position * _kvDim, _kvDim);
+        public Span<float> KeySlot(int layer, int kvHead, int position) =>
+            _keys.AsSpan(SlotOffset(kvHead, position), HeadDim);
 
-        public ReadOnlySpan<float> Key(int layer, int position) => KeySlot(layer, position);
+        public Span<float> ValueSlot(int layer, int kvHead, int position) =>
+            _values.AsSpan(SlotOffset(kvHead, position), HeadDim);
 
-        public ReadOnlySpan<float> Value(int layer, int position) => ValueSlot(layer, position);
+        public ReadOnlySpan<float> KeyBlockForHead(int layer, int kvHead, int logicalBlock, int count) =>
+            _keys.AsSpan(TileOffset(kvHead, logicalBlock), count * HeadDim);
+
+        public ReadOnlySpan<float> ValueBlockForHead(int layer, int kvHead, int logicalBlock, int count) =>
+            _values.AsSpan(TileOffset(kvHead, logicalBlock), count * HeadDim);
+
+        public void Reset() => Length = 0;
+
+        public void Rollback(int toPosition) => Length = toPosition;
+
+        private int SlotOffset(int kvHead, int position) => ((kvHead * _capacity) + position) * HeadDim;
+
+        private int TileOffset(int kvHead, int logicalBlock) => SlotOffset(kvHead, logicalBlock * BlockSize);
     }
 }

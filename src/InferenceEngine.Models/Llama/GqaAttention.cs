@@ -6,9 +6,12 @@ namespace InferenceEngine.Models.Llama;
 
 /// <summary>
 /// Grouped-query attention over the KV cache for a single layer at a single decode position.
-/// Extracted verbatim from <c>LlamaModel.Forward</c>'s attention block so it has its own,
-/// independently testable surface — see the attention-and-transformer and kv-cache ADRs. This
-/// step is a pure relocation (no behavior change); the loop order changes in a later step.
+/// Extracted from <c>LlamaModel.Forward</c>'s attention block so it has its own, independently
+/// testable surface — see the attention-and-transformer and kv-cache ADRs. Walks the KV cache one
+/// logical block at a time via <see cref="IKvCache.KeyBlockForHead"/>/
+/// <see cref="IKvCache.ValueBlockForHead"/>, since the head-major cache no longer exposes a
+/// whole-context contiguous read (a KV head's data across positions can span multiple physical
+/// blocks once paging lands).
 /// </summary>
 internal static class GqaAttention
 {
@@ -40,19 +43,29 @@ internal static class GqaAttention
     {
         var groupSize = numQHeads / numKvHeads;
         var contextLength = position + 1;
+        var blockSize = kvCache.BlockSize;
+        var numBlocks = (contextLength + blockSize - 1) / blockSize;
 
         for (var kvh = 0; kvh < numKvHeads; kvh++)
         {
             var qBase = kvh * groupSize;
 
-            // pass 1: scores for all groupSize query heads sharing this KV head.
-            for (var t = 0; t < contextLength; t++)
+            // pass 1: scores for all groupSize query heads sharing this KV head, one logical
+            // block's tile at a time — never assume adjacent blocks are contiguous in memory,
+            // since a paged cache's blocks can be scattered.
+            var t = 0;
+            for (var b = 0; b < numBlocks; b++)
             {
-                var kHead = kvCache.Key(layer, t).Slice(kvh * headDim, headDim);
-                for (var g = 0; g < groupSize; g++)
+                var count = System.Math.Min(blockSize, contextLength - t);
+                var kBlock = kvCache.KeyBlockForHead(layer, kvh, b, count);
+                for (var i = 0; i < count; i++, t++)
                 {
-                    var qHead = q.Slice((qBase + g) * headDim, headDim);
-                    scores[(g * scoreStride) + t] = TensorPrimitives.Dot(qHead, kHead) * scale;
+                    var kHead = kBlock.Slice(i * headDim, headDim);
+                    for (var g = 0; g < groupSize; g++)
+                    {
+                        var qHead = q.Slice((qBase + g) * headDim, headDim);
+                        scores[(g * scoreStride) + t] = TensorPrimitives.Dot(qHead, kHead) * scale;
+                    }
                 }
             }
 
@@ -64,15 +77,22 @@ internal static class GqaAttention
                 attnOut.Slice((qBase + g) * headDim, headDim).Clear();
             }
 
-            // pass 2: V-weighted accumulation, t ascending — float addition isn't associative, so
-            // this order must match the original query-head-outermost loop exactly.
-            for (var t = 0; t < contextLength; t++)
+            // pass 2: V-weighted accumulation, t ascending across blocks — float addition isn't
+            // associative, so this order must match the original query-head-outermost loop
+            // exactly.
+            t = 0;
+            for (var b = 0; b < numBlocks; b++)
             {
-                var vHead = kvCache.Value(layer, t).Slice(kvh * headDim, headDim);
-                for (var g = 0; g < groupSize; g++)
+                var count = System.Math.Min(blockSize, contextLength - t);
+                var vBlock = kvCache.ValueBlockForHead(layer, kvh, b, count);
+                for (var i = 0; i < count; i++, t++)
                 {
-                    var outHead = attnOut.Slice((qBase + g) * headDim, headDim);
-                    TensorPrimitives.MultiplyAdd(vHead, probs[(g * scoreStride) + t], outHead, outHead);
+                    var vHead = vBlock.Slice(i * headDim, headDim);
+                    for (var g = 0; g < groupSize; g++)
+                    {
+                        var outHead = attnOut.Slice((qBase + g) * headDim, headDim);
+                        TensorPrimitives.MultiplyAdd(vHead, probs[(g * scoreStride) + t], outHead, outHead);
+                    }
                 }
             }
         }

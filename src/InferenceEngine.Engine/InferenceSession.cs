@@ -78,7 +78,7 @@ public sealed class InferenceSession
                 $"Prompt length {promptIds.Count} exceeds the model's max context ({Config.MaxSeqLen}).", nameof(promptIds));
         }
 
-        var kv = new SimpleKvCache(Config.NumLayers, promptIds.Count, Config.NumKvHeads * Config.HeadDim);
+        var kv = new SimpleKvCache(Config.NumLayers, promptIds.Count, Config.NumKvHeads, Config.HeadDim);
         var logits = default(ReadOnlySpan<float>);
         for (var i = 0; i < promptIds.Count; i++)
         {
@@ -125,7 +125,7 @@ public sealed class InferenceSession
 
     private IEnumerable<GeneratedToken> GenerateCore(IReadOnlyList<int> promptIds, int sequenceLength, GenerationOptions options)
     {
-        var kv = new SimpleKvCache(Config.NumLayers, sequenceLength, Config.NumKvHeads * Config.HeadDim);
+        var kv = new SimpleKvCache(Config.NumLayers, sequenceLength, Config.NumKvHeads, Config.HeadDim);
         var sampler = new SamplingPipeline(options, Config.VocabSize);
         var decoder = new IncrementalUtf8Decoder();
 

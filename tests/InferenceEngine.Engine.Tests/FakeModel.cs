@@ -18,8 +18,9 @@ internal sealed class FakeModel(ModelConfig config, int? preferredTokenId = null
     public ReadOnlySpan<float> Forward(int tokenId, int position, IKvCache kvCache, bool needLogits)
     {
         ForwardCallCount++;
-        kvCache.KeySlot(0, position)[0] = tokenId;
-        kvCache.ValueSlot(0, position)[0] = tokenId;
+        kvCache.Reserve(position);
+        kvCache.KeySlot(0, 0, position)[0] = tokenId;
+        kvCache.ValueSlot(0, 0, position)[0] = tokenId;
         return needLogits ? _logits : ReadOnlySpan<float>.Empty;
     }
 
