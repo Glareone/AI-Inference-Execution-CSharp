@@ -28,8 +28,9 @@
 Seven placeholder ADRs were created (`Status: planned`), one per component challenge from the
 [project-challenges ADR](../architecture/260901-project-challenges-and-how-to-address-them.md).
 Each carries its owning project and build-vs-reuse stance; the MADR body is filled in — and the
-file renamed to `YYMMDD-<slug>.md` — when its round comes. One (KV-cache) has been written up;
-six remain as placeholders below, several already implemented in code ahead of their ADR.
+file renamed to `YYMMDD-<slug>.md` — when its round comes. Two (KV-cache, Sampling pipeline) have
+been written up; five remain as placeholders below, several already implemented in code ahead of
+their ADR.
 
 1. **[Model format loading](../architecture/planned-format-loading.md)** — placeholder created;
    to fill: GGUF vs. SafeTensors and the parsing library. (Format research done — see below.)
@@ -39,8 +40,10 @@ six remain as placeholders below, several already implemented in code ahead of t
    placeholder created; to fill: forward-pass approach on a math library.
 4. **[KV-cache](../architecture/260914-kv-cache.md)** — done: block-paged, head-major (HND)
    layout, single sequence. See [kv-cache-research.md](kv-cache-research.md).
-5. **[Sampling pipeline](../architecture/planned-sampling-pipeline.md)** — placeholder created;
-   to fill: composable sampler chain design.
+5. **[Logits processing and sampling pipeline](../architecture/260917-logits-processing.md)** —
+   done: four-way tokenizer/logits/logits-processor/sampler split, `ILogitsProcessor` +
+   `BannedSequenceLogitsProcessor` design, chosen as an internal split inside `Engine` rather than
+   a new project.
 6. **[HuggingFace model acquisition](../architecture/planned-huggingface-acquisition.md)** —
    placeholder created; to fill: download library, cache layout, resume/verify behavior.
 7. **[Performance baseline](../architecture/planned-performance-baseline.md)** — placeholder

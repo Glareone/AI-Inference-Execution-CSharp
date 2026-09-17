@@ -159,7 +159,8 @@ isn't. See each test project's own `README.md` for the business scenarios covere
 | [Solution and project layout](docs/architecture/260811-solution-and-project-layout.md) | proposed |
 | [Project challenges and how to address them](docs/architecture/260901-project-challenges-and-how-to-address-them.md) | proposed |
 | [Paged + head-major KV-cache](docs/architecture/260914-kv-cache.md) | proposed |
-| Attention & transformer, model format loading, tokenization, sampling pipeline | still `planned` placeholders — each is already implemented in code, the ADR write-up just hasn't caught up |
+| [Logits processing and sampling pipeline](docs/architecture/260917-logits-processing.md) | proposed |
+| Attention & transformer, model format loading, tokenization | still `planned` placeholders — each is already implemented in code, the ADR write-up just hasn't caught up |
 | HuggingFace model acquisition, performance baseline | still `planned` placeholders, and genuinely not started — models are fetched via the dotLLM CLI as a stopgap, not a real download path of our own, and there's no formal performance-baseline methodology yet beyond the ad hoc measurements in `experiments/` |
 
 ### Known limitations

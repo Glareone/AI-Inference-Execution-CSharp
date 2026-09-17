@@ -138,6 +138,30 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   ADR's independent ~23% traffic-reduction estimate. Includes the reproduction fixture
   (`kv-benchmark-long-prompt.txt`) and the measured hardware facts (128 B cache line, 4 MiB L2) the
   block-size choice depends on.
+- [Logits processing and sampling pipeline ADR](docs/architecture/260917-logits-processing.md)
+  (`260917-logits-processing.md`, replacing the `planned-sampling-pipeline.md` placeholder): draws
+  an explicit four-way line between the tokenizer, the raw logits data crossing the
+  `Models → Engine` boundary, a new deterministic *logits processor* phase, and the existing
+  probabilistic *sampler*. Chosen design (Option B): an internal split inside `Engine` — a new
+  `ILogitsProcessor` interface distinct from `ISamplerStep`, with `BannedSequenceLogitsProcessor`
+  (HuggingFace `NoBadWordsLogitsProcessor`-style sequence-prefix matching) as its first
+  implementation, and `SamplingPipeline.Sample` running all registered processors unconditionally
+  before the greedy/stochastic branch splits — the current greedy path bypasses `ISamplerStep`
+  entirely, which a ban must not. Rejected a new `InferenceEngine.LogitsProcessing` project as
+  disproportionate ceremony for this round's content, backed by a survey showing dotLLM,
+  HuggingFace transformers, vLLM, and llama.cpp all treat this as a phase split within one
+  pipeline, never a package boundary. Names repetition penalty, forced-token bias, and
+  grammar/schema-constrained decoding as future seams, not built now.
+- Polished [260811-solution-and-project-layout.md](docs/architecture/260811-solution-and-project-layout.md):
+  labeled its existing project-reference diagram explicitly as a C4 Container diagram, and noted
+  the new sampler/logits-processor split inside `Engine`'s row without adding a new project row.
+- Polished [260901-project-challenges-and-how-to-address-them.md](docs/architecture/260901-project-challenges-and-how-to-address-them.md):
+  fixed a dead link (KV-cache row pointed at the retired `planned-kv-cache.md`; now points at
+  `260914-kv-cache.md`) and repointed the Sampling/logits row's follow-up-ADR link from the
+  retired `planned-sampling-pipeline.md` to `260917-logits-processing.md`.
+- Retired `docs/architecture/planned-sampling-pipeline.md` (placeholder, `Status: planned`),
+  superseded by `260917-logits-processing.md` — same pattern as the KV-cache round retiring
+  `planned-kv-cache.md`.
 
 ### Fixed
 

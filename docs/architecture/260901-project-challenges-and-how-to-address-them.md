@@ -88,8 +88,8 @@ row gets its own future ADR:
 | Model loading | Reuse a parsing library; mmap the weight blob (no copy) | `Models` | [Format loading](planned-format-loading.md) |
 | Tokenization | Reuse a tokenizer library (BPE/SPM) | `Tokenizers` | [Tokenization](planned-tokenization.md) |
 | Transformer forward pass / attention | **Build** on top of a math library (no custom kernels) | `Models` (+ `Core` types) | [Attention & transformer](planned-attention-and-transformer.md) |
-| KV-cache | **Build** — start simple (contiguous), understand before optimizing | `Engine` | [KV-cache](planned-kv-cache.md) |
-| Sampling / logits | **Build** — composable temp/top-k/top-p chain | `Engine` | [Sampling pipeline](planned-sampling-pipeline.md) |
+| KV-cache | **Build** — start simple (contiguous), understand before optimizing | `Engine` | [KV-cache](260914-kv-cache.md) |
+| Sampling / logits | **Build** — composable temp/top-k/top-p chain, plus deterministic logits processing (e.g. banned-sequence masking) as a distinct phase | `Engine` | [Logits processing and sampling pipeline](260917-logits-processing.md) |
 | Orchestration / generation loop | **Build** — the facade + streamed decode loop | `Engine` | (covered by structure + this ADR) |
 | Performance | Measure against dotLLM; managed-first, `unsafe` only with sign-off | cross-cutting | [Performance baseline](planned-performance-baseline.md) |
 | Serving | Deferred until the generate loop works | (future `Server`) | (future) |
@@ -237,3 +237,4 @@ sources.
 | Date       | Change            | By                 |
 |------------|-------------------|--------------------|
 | 2026-09-01 | Initial proposal  | Aleksei Kolesnikov |
+| 2026-09-17 | Fixed dead link: KV-cache row pointed at the retired `planned-kv-cache.md` placeholder, now points at [260914-kv-cache.md](260914-kv-cache.md); updated the Sampling/logits row's follow-up link from the retired `planned-sampling-pipeline.md` placeholder to [260917-logits-processing.md](260917-logits-processing.md) | Aleksei Kolesnikov |
