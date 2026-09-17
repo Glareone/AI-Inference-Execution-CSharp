@@ -45,6 +45,34 @@ The physical block allocator every `PagedKvCache` session shares — see the
 - Sampling is reproducible: the same seed and logits always produce the same chosen token.
 - Sampling never mutates the caller's input logits span (the pipeline works on its own scratch
   buffer).
+- **Regression**: banning the single highest-logit token still changes the result under greedy
+  decoding (`Temperature: 0`) — before this fix, `SamplingPipeline` only ran its
+  `ISamplerStep` chain when `Temperature > 0`, so a ban could never reach the default, greedy path
+  at all.
+- All-masked fallback: if every logit is `float.NegativeInfinity` after logits processors run,
+  `Sample` returns the EOS token id directly, on both the greedy path and the stochastic path.
+  The stochastic case is also the regression test for a NaN-propagation bug: `Exp(-inf - -inf)`
+  is `NaN`, and NaN comparisons are always `false`, so the pre-fix cumulative-probability loop
+  fell through to an arbitrary last index instead of EOS.
+
+### `Sampling/BannedSequenceLogitsProcessor` (`Sampling/BannedSequenceLogitsProcessorTests.cs`)
+
+Bans literal words/phrases from ever being generated (e.g. a competitor's name), applied as a
+deterministic hard constraint *before* `SamplingPipeline`'s probabilistic sampler steps run —
+see the [logits-processing ADR](../../docs/architecture/260917-logits-processing.md).
+
+- A single-token banned sequence is always masked, regardless of what's been generated so far.
+- A multi-token banned sequence (the common case — most real words BPE-split into more than one
+  token) is masked only once the tokens generated so far end with that sequence's prefix, not
+  before.
+- Multiple independent banned sequences apply correctly together in one `Apply` call, and a
+  sequence longer than the history generated so far is simply not yet reachable — it does not
+  throw.
+- The EOS token can never be banned, whether it's named directly as a length-1 sequence or as the
+  completing token of a longer one whose prefix matches — the invariant `SamplingPipeline`'s
+  all-masked fallback depends on.
+- `FromWords` silently drops a word that tokenizes to a single EOS token, without affecting any
+  other word's ban.
 
 ### `Prompting/ChatMlTemplate`, `ChatPromptBuilder`, `IChatPromptStep` (`Prompting/*.cs`)
 

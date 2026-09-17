@@ -1,5 +1,7 @@
 # AI-Inference-Execution-CSharp
 
+[![Tests](https://github.com/Glareone/AI-Inference-Execution-CSharp/actions/workflows/tests.yml/badge.svg)](https://github.com/Glareone/AI-Inference-Execution-CSharp/actions/workflows/tests.yml)
+
 An investigation into how LLM inference engines work, implemented in C#/.NET 10.
 
 ## What This Project Is
@@ -9,24 +11,36 @@ loading, tokenization, attention mechanisms, KV-cache, sampling, serving — by 
 working version in C#. Not a production engine. Not a wrapper. A guided investigation where
 every component is understood deeply enough to explain to anyone.
 
+## How to test the project
+
+Point `--model` at a local GGUF file (F16 or F32 — see [Test Model](#test-model)) and pass a prompt:
+
+```sh
+dotnet run --project src/InferenceEngine.Cli -- --model /path/to/SmolLM2-135M-Instruct-f16.gguf --prompt "What is machine learning? Explain briefly."
+```
+
+The answer streams straight to the console. Or copy `.env.example` to `.env`, set
+`INFERENCE_MODEL`, and just run `dotnet run --project src/InferenceEngine.Cli`. Worth trying:
+`--temperature 0.7` for varied output instead of the deterministic default, or
+`--ban-words "Machine"` to see a specific word excluded from generation.
+
 ## What We're Investigating
 
-1. **GGUF model format** — how quantized weights are stored, parsed, and memory-mapped
-2. **Tokenization** — BPE and SentencePiece algorithms, vocabulary, merge rules
-3. **Transformer architecture** — self-attention (MHA, GQA, MQA), RoPE, RMSNorm, SwiGLU FFN
-4. **KV-cache** — why it exists, simple vs paged designs, memory cost
-5. **Logits processing & sampling** — temperature, top-k, top-p, repetition penalties
-6. **HuggingFace integration** — model discovery, downloading, format ecosystem
-7. **Performance** — tokens/second, memory bandwidth vs compute, SIMD in .NET, GC pressure
+GGUF loading, BPE tokenization, the transformer forward pass (GQA, RoPE, SwiGLU), a paged
+KV-cache, sampling, and logits processing — each a real ADR in `docs/architecture/`, not just a
+topic list.
 
-Each topic is documented as an ADR (Architecture Decision Record) in `docs/architecture/`,
-capturing both what we learned and what we decided for our implementation.
+**Supported today**: Llama-architecture GGUF (F32/F16 only), text prompts (ChatML or raw), and
+temperature/top-k/top-p/seed control — plus banning specific token sequences (e.g. keeping a
+competitor's name out of the output entirely), enforced on every decode step including the
+default greedy path. See [Known limitations](#known-limitations) for what's not there yet.
 
 ## Architecture
 
 Start with the [solution-layout ADR](docs/architecture/260811-solution-and-project-layout.md) —
 project boundaries, what each project owns, why. The diagram below is the runtime pipeline that
 layout supports: one prompt in, one streamed response out.
+
 
 ```mermaid
 flowchart TB
@@ -43,7 +57,7 @@ flowchart TB
 
     subgraph eng["InferenceEngine.Engine"]
         kv["KV-cache: paged, head-major"]
-        processor["Logits Processor, planned: ban token sequences"]
+        processor["Logits Processor: ban token sequences"]
         sampler["Sampler: temperature, top-k, top-p"]
     end
 
@@ -55,52 +69,6 @@ flowchart TB
     sampler -->|EOS or max tokens| decode
     decode --> output["Streamed text"]
 ```
-
-- **Models supported**: Llama-architecture GGUF only (SmolLM2-135M-Instruct confirmed working),
-  F32/F16 tensors only. No quantized dequantization, no Mistral/Qwen/Phi yet — see
-  [Known limitations](#known-limitations).
-- **Input supported**: a text prompt via CLI flag, environment variable, or `.env`; ChatML-templated
-  by default or raw; generation controlled by temperature, top-k, top-p, seed, and max tokens.
-- **What we protect against**: the Logits Processor stage above is *designed, not yet built* — see
-  [260917-logits-processing.md](docs/architecture/260917-logits-processing.md) and the
-  [Phase B plan](docs/investigation/status.md). Once implemented, it lets a caller ban specific
-  token *sequences* (e.g. a competitor's name) from ever being generated, enforced deterministically
-  on every decode step — including the default greedy path, where today's sampler chain is silently
-  skipped entirely.
-
-## References & Inspiration
-
-### Primary Reference
-
-- **[dotLLM](https://github.com/kkokosa/dotLLM)** by Konrad Kokosa — a ground-up LLM
-  inference engine in pure C#/.NET 10. Not a wrapper around llama.cpp. Reaches 66–88%
-  of llama.cpp decode throughput on CPU. Supports Llama, Mistral, Phi, Qwen, DeepSeek.
-  Our architecture is inspired by its layered design (Core → Models/Tokenizers → Engine).
-  - Blog post: [Introducing dotLLM](https://kokosa.dev/blog/2026/dotllm/)
-  - Foundational posts: [Logits, logprobs, and temperature](https://kokosa.dev/blog/2026/temperature/),
-    [Visualizing logprobs](https://kokosa.dev/blog/2026/logprobs/)
-
-### Other C# Projects Studied
-
-- **[LLamaSharp](https://github.com/SciSharp/LLamaSharp)** — mature P/Invoke wrapper
-  around llama.cpp. High-level API patterns (executors, context management). Not a learning
-  tool for internals, but useful for API design reference.
-- **[ONNX Runtime GenAI](https://github.com/microsoft/onnxruntime-genai)** — Microsoft's
-  ONNX-based inference with generate loop. Different format (ONNX, not GGUF).
-- **[Microsoft.ML.Tokenizers](https://www.nuget.org/packages/Microsoft.ML.Tokenizers)** —
-  standalone .NET tokenizer library (BPE, SentencePiece, Tiktoken). Candidate for our
-  tokenizer implementation.
-
-### Background Reading
-
-- **[llama.cpp](https://github.com/ggml-org/llama.cpp)** — the C/C++ inference engine
-  that defined the GGUF format and local LLM inference
-- [GGUF format specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
-- [Implementing BPE from Scratch](https://sebastianraschka.com/blog/2025/bpe-from-scratch.html) — Sebastian Raschka
-- [HuggingFace Tokenizer Summary](https://huggingface.co/docs/transformers/tokenizer_summary)
-- [KV-Cache Explained](https://www.emergentmind.com/topics/kv-cache)
-- Konrad Kokosa, *Pro .NET Memory Management* (2nd ed.) — relevant for understanding
-  GC-free inference and native memory patterns in .NET
 
 ## Project Structure
 
@@ -175,8 +143,12 @@ samples, and streams generated text — on real weights, not a stub. Last verifi
   [KV-cache ADR](docs/architecture/260914-kv-cache.md) and its
   [benchmark](experiments/kv-layout-benchmark.md) (+4.7% at short context, −24% wall-clock at a
   1,900-token prompt vs. the original contiguous cache).
+- **Logits processing**: `ILogitsProcessor`/`BannedSequenceLogitsProcessor` — bans literal token
+  *sequences* from ever being generated, enforced on every decode step including the default
+  greedy path. See the [logits-processing ADR](docs/architecture/260917-logits-processing.md).
 - **Sampling**: composable temperature / top-k / top-p pipeline (`InferenceEngine.Engine/Sampling/`).
-- **CLI**: streamed token output, `--stats`, `--debug-tokenize`, `--debug-logits`, `.env` config.
+- **CLI**: streamed token output, `--stats`, `--debug-tokenize`, `--debug-logits`, `--ban-words`,
+  `.env` config.
 
 On this dev machine (Apple M4 Pro), SmolLM2-135M-Instruct-F16 generates at **~30 tok/s decode**
 at short context (see [experiments/kv-layout-benchmark.md](experiments/kv-layout-benchmark.md) for
@@ -184,15 +156,15 @@ longer-context numbers).
 
 ### Test coverage
 
-**97 test cases, 0 failing**, one xUnit v3 project per `src/` project:
+**113 test cases, 0 failing**, one xUnit v3 project per `src/` project:
 
 | Project | Test cases (incl. `[Theory]` rows) |
 |---|---|
 | `InferenceEngine.Core.Tests` | 4 |
 | `InferenceEngine.Tokenizers.Tests` | 8 |
-| `InferenceEngine.Cli.Tests` | 20 |
+| `InferenceEngine.Cli.Tests` | 24 |
 | `InferenceEngine.Models.Tests` | 33 (incl. a bit-exact FNV-1a golden-logit-hash regression test against the real model) |
-| `InferenceEngine.Engine.Tests` | 32 |
+| `InferenceEngine.Engine.Tests` | 44 |
 
 Run with `dotnet test`. Two of the `Models.Tests` cases (the golden-logit baseline) additionally
 need `INFERENCE_MODEL=<path.gguf>` set to a real GGUF file — they skip cleanly, not fail, when it
@@ -202,11 +174,12 @@ isn't. See each test project's own `README.md` for the business scenarios covere
 
 | ADR | Status |
 |---|---|
-| [Solution and project layout](docs/architecture/260811-solution-and-project-layout.md) | proposed |
-| [Project challenges and how to address them](docs/architecture/260901-project-challenges-and-how-to-address-them.md) | proposed |
-| [Paged + head-major KV-cache](docs/architecture/260914-kv-cache.md) | proposed |
-| [Logits processing and sampling pipeline](docs/architecture/260917-logits-processing.md) | proposed |
-| Attention & transformer, model format loading, tokenization | still `planned` placeholders — each is already implemented in code, the ADR write-up just hasn't caught up |
+| [Solution and project layout](docs/architecture/260811-solution-and-project-layout.md) | accepted |
+| [Project challenges and how to address them](docs/architecture/260901-project-challenges-and-how-to-address-them.md) | accepted |
+| [Paged + head-major KV-cache](docs/architecture/260914-kv-cache.md) | accepted |
+| [Logits processing and sampling pipeline](docs/architecture/260917-logits-processing.md) | accepted |
+| [Attention & transformer](docs/architecture/260917-attention-and-transformer.md) | accepted |
+| Model format loading, tokenization | still `planned` placeholders — each is already implemented in code, the ADR write-up just hasn't caught up |
 | HuggingFace model acquisition, performance baseline | still `planned` placeholders, and genuinely not started — models are fetched via the dotLLM CLI as a stopgap, not a real download path of our own, and there's no formal performance-baseline methodology yet beyond the ad hoc measurements in `experiments/` |
 
 ### Known limitations
@@ -254,11 +227,49 @@ quantization ADR and implementation land," not a calendar date.
 See [docs/investigation/status.md](docs/investigation/status.md) for the investigation-phase
 history and [CHANGELOG.md](CHANGELOG.md) for the detailed change-by-change log.
 
+
+## References & Inspiration
+
+### Primary Reference
+
+- **[dotLLM](https://github.com/kkokosa/dotLLM)** by Konrad Kokosa — a ground-up LLM
+  inference engine in pure C#/.NET 10. Not a wrapper around llama.cpp. Reaches 66–88%
+  of llama.cpp decode throughput on CPU. Supports Llama, Mistral, Phi, Qwen, DeepSeek.
+  Our architecture is inspired by its layered design (Core → Models/Tokenizers → Engine).
+  - Blog post: [Introducing dotLLM](https://kokosa.dev/blog/2026/dotllm/)
+  - Foundational posts: [Logits, logprobs, and temperature](https://kokosa.dev/blog/2026/temperature/),
+    [Visualizing logprobs](https://kokosa.dev/blog/2026/logprobs/)
+
+### Other C# Projects Studied
+
+- **[LLamaSharp](https://github.com/SciSharp/LLamaSharp)** — mature P/Invoke wrapper
+  around llama.cpp. High-level API patterns (executors, context management). Not a learning
+  tool for internals, but useful for API design reference.
+- **[ONNX Runtime GenAI](https://github.com/microsoft/onnxruntime-genai)** — Microsoft's
+  ONNX-based inference with generate loop. Different format (ONNX, not GGUF).
+- **[Microsoft.ML.Tokenizers](https://www.nuget.org/packages/Microsoft.ML.Tokenizers)** —
+  standalone .NET tokenizer library (BPE, SentencePiece, Tiktoken). Candidate for our
+  tokenizer implementation.
+
+### Background Reading
+
+- **[llama.cpp](https://github.com/ggml-org/llama.cpp)** — the C/C++ inference engine
+  that defined the GGUF format and local LLM inference
+- [GGUF format specification](https://github.com/ggml-org/ggml/blob/master/docs/gguf.md)
+- [Implementing BPE from Scratch](https://sebastianraschka.com/blog/2025/bpe-from-scratch.html) — Sebastian Raschka
+- [HuggingFace Tokenizer Summary](https://huggingface.co/docs/transformers/tokenizer_summary)
+- [KV-Cache Explained](https://www.emergentmind.com/topics/kv-cache)
+- Konrad Kokosa, *Pro .NET Memory Management* (2nd ed.) — relevant for understanding
+  GC-free inference and native memory patterns in .NET
+
+
 ## Project Docs
 
 - [AGENTS.md](AGENTS.md) — ground rules for any AI coding assistant (stack, `unsafe` policy,
   ADR process)
 - [CLAUDE.md](CLAUDE.md) — Claude Code–specific config (subagents, skills)
+- [.github/workflows/tests.yml](.github/workflows/tests.yml) — CI: restores, builds, and runs
+  `dotnet test` on every push to `main` and every PR
 - **Architecture decisions** ([docs/architecture/](docs/architecture/),
   [MADR](https://adr.github.io/madr/) format) — see the
   [Architecture decisions](#architecture-decisions) table above for every ADR and its status.

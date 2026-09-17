@@ -14,6 +14,12 @@ Feature: CLI configuration and error reporting
     When configuration is loaded
     Then the environment variable's value is used
 
+  Scenario: A command-line flag overrides an environment variable for banned words
+    Given INFERENCE_BAN_WORDS is set in the environment
+    And "--ban-words" is also passed on the command line, comma-separated and untrimmed
+    When configuration is loaded
+    Then the command-line value is used, split on commas with no whitespace trimmed
+
   Scenario: A .env file supplies a default when nothing else does
     Given a .env file setting INFERENCE_MAX_TOKENS
     And no matching environment variable or command-line flag

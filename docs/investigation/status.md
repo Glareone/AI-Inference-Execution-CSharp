@@ -28,16 +28,18 @@
 Seven placeholder ADRs were created (`Status: planned`), one per component challenge from the
 [project-challenges ADR](../architecture/260901-project-challenges-and-how-to-address-them.md).
 Each carries its owning project and build-vs-reuse stance; the MADR body is filled in — and the
-file renamed to `YYMMDD-<slug>.md` — when its round comes. Two (KV-cache, Sampling pipeline) have
-been written up; five remain as placeholders below, several already implemented in code ahead of
-their ADR.
+file renamed to `YYMMDD-<slug>.md` — when its round comes. Three (KV-cache, Sampling pipeline,
+Attention & transformer) have been written up; four remain as placeholders below, several already
+implemented in code ahead of their ADR.
 
 1. **[Model format loading](../architecture/planned-format-loading.md)** — placeholder created;
    to fill: GGUF vs. SafeTensors and the parsing library. (Format research done — see below.)
 2. **[Tokenization](../architecture/planned-tokenization.md)** — placeholder created; to fill:
    tokenizer library choice and pre-tokenizer sourcing. (Ecosystem research done — see below.)
-3. **[Attention & transformer](../architecture/planned-attention-and-transformer.md)** —
-   placeholder created; to fill: forward-pass approach on a math library.
+3. **[Attention & transformer](../architecture/260917-attention-and-transformer.md)** — done:
+   generalized GQA-with-RoPE formula (MHA/MQA fall out as ratio edge cases, only 3:1 actually
+   exercised), pre-norm layers, SwiGLU FFN, single-token-only `Forward`, entirely on
+   `TensorPrimitives`.
 4. **[KV-cache](../architecture/260914-kv-cache.md)** — done: block-paged, head-major (HND)
    layout, single sequence. See [kv-cache-research.md](kv-cache-research.md).
 5. **[Logits processing and sampling pipeline](../architecture/260917-logits-processing.md)** —
@@ -55,10 +57,11 @@ their ADR.
    [README](../../README.md#status).
 10. **Serving** (later) — OpenAI-compatible HTTP endpoint. Not started.
 
-## Logits processing — pending implementation (Phase B)
+## Logits processing — Phase B (code complete, tested)
 
-ADR done ([260917](../architecture/260917-logits-processing.md)). Code not started. Docs merge to
-main first; implementation is the next round. Do steps 1-3 before 4-7 — they're the dependency.
+ADR done ([260917](../architecture/260917-logits-processing.md)). Code complete and tested: 14 new
+tests (113 total, all passing), `GoldenLogitBaselineTests`' hashes unchanged (banning is opt-in).
+Kept below as a record of what was built.
 
 1. `src/InferenceEngine.Engine/Sampling/ILogitsProcessor.cs` — new. `internal interface`, one
    method: `void Apply(Span<float> logits, ReadOnlySpan<int> generatedTokenIds)`.
@@ -102,27 +105,32 @@ main first; implementation is the next round. Do steps 1-3 before 4-7 — they'r
 7. `src/InferenceEngine.Cli/Program.cs` — edit. Thread the new option through. While here: switch
    the `GenerationOptions` construction from positional to named arguments — the positional call
    breaks silently if a field lands out of order.
-8. Tests (`test-writer-runner` agent):
+8. Tests (`test-writer-runner` agent) — done, 14 new tests:
    - `BannedSequenceLogitsProcessor`: single-token always-banned; multi-token sequence-prefix
      match; multiple independent sequences; a sequence longer than history doesn't crash; banning
-     the EOS token id is a no-op (still not masked).
-   - **Critical regression test**: banned tokens excluded on the default greedy path
-     (`Temperature=0`). This is the one thing the whole redesign exists to make true.
-   - **All-masked fallback, both paths**: construct a pipeline where every non-EOS token is
-     banned (or force-mask via a test double) and assert `Sample` returns EOS in greedy mode
-     (`Temperature=0`) and in stochastic mode (`Temperature>0`) — this is the exact bug CodeRabbit
-     caught by reading the code, not by running it; prove it's fixed by running it.
-   - `CliOptions` parsing test for the new flag.
-   - `GoldenLogitBaselineTests` stays green — banning defaults to off, hashes shouldn't move.
+     the EOS token id is a no-op (still not masked), directly and as a completing token;
+     `FromWords` drops a word that encodes to a single EOS token.
+   - **Critical regression test**: banning the single highest-logit token still changes the
+     result under the default greedy path (`Temperature=0`). This is the one thing the whole
+     redesign exists to make true.
+   - **All-masked fallback, both paths**: a pipeline where every non-EOS token is banned and the
+     EOS position's own raw logit is already `-inf` (so the fallback itself is exercised, not
+     just "EOS happens to be the only finite logit") returns EOS in greedy mode (`Temperature=0`)
+     and in stochastic mode (`Temperature>0`) — the latter is the exact NaN-propagation bug
+     CodeRabbit caught by reading the code, proven fixed by running it.
+   - `CliOptions` parsing tests for `--ban-words`/`INFERENCE_BAN_WORDS`: flag parsing with no
+     trimming, env-var fallback, flag-beats-env precedence, and the off-by-default (`null`) case.
+   - `GoldenLogitBaselineTests` stays green — banning defaults to off, hashes unchanged.
 9. `CHANGELOG.md` + affected test project `README.md`s +
-   `docs/scenarios/InferenceEngine.Engine.feature` — add scenarios for the banned-sequence
-   processor once it's implemented and tested (scenarios mirror real coverage here, not written
-   ahead of it). Reword the existing sampling scenarios if needed to name the *sampler* phase
-   specifically, now that a distinct *processor* phase exists alongside it.
+   `docs/scenarios/InferenceEngine.Engine.feature` + `docs/scenarios/InferenceEngine.Cli.feature`
+   — done. Scenarios added for the banned-sequence processor mirror the real coverage above, not
+   written ahead of it. The sampling scenarios' feature description now names the *logits
+   processor* phase alongside the *sampler* phase.
 
-Verify: `dotnet build` clean (0 warnings — `TreatWarningsAsErrors=true`), `dotnet test` green.
-Manual smoke test: `--ban-words "EPAM"` on a prompt likely to invoke it — confirm it never
-appears. Golden-logit hash unaffected (banning is opt-in, off by default).
+Verified: `dotnet build` clean (0 warnings — `TreatWarningsAsErrors=true`), `dotnet test` green
+(113/113, up from 99). Golden-logit hashes unaffected (banning is opt-in, off by default):
+`0xB07058A15AA1650A` (short prompt), `0xECC1669FE5C7DB32` (long prompt), both unchanged from
+before this round.
 
 ## Further phases (not started, no ADR yet)
 

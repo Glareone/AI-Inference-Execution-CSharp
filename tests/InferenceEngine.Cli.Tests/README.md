@@ -14,6 +14,11 @@ command-line flags, with flags always winning over environment, which wins over 
   `ArgumentException` before any model-loading work would start.
 - An environment variable is used when no flag is given; a flag overrides an environment variable
   when both are present.
+- `--ban-words`/`INFERENCE_BAN_WORDS` follow the same flag-beats-env precedence, comma-split with
+  **no** trimming — `"EPAM,EPAM ,E"` parses to three entries, the middle one keeping its trailing
+  space, since a trailing space is a meaningfully different literal to ban, not incidental
+  whitespace. With neither the flag nor the environment variable set, `BannedWords` is `null` —
+  pinning banning as opt-in and fully off by default.
 - Full three-tier precedence in one scenario: a `.env` file, a real environment variable, and a
   command-line flag are all present at once — the flag wins for the field it sets, the
   environment variable wins over `.env` for the field only it and `.env` set, and `.env` supplies

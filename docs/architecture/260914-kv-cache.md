@@ -1,6 +1,6 @@
 # Paged + head-major KV cache
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-14
 
 ## Where this problem is isolated
@@ -294,3 +294,4 @@ Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
 |------------|---------------------|--------------------|
 | 2026-09-01 | Placeholder created | Aleksei Kolesnikov |
 | 2026-09-14 | ADR written: chosen block-paged + head-major design (Option C), superseding the placeholder's "paged is a later step, if at all" stance with a deliberate revision; sequenced as loop-reorder / layout / paging as separate measured commits | Aleksei Kolesnikov |
+| 2026-09-17 | Status: proposed → accepted — implemented, tested (99 tests), benchmarked, and lived with through a CodeRabbit-fix round without reversal | Aleksei Kolesnikov |

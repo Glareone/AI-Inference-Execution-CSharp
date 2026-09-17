@@ -1,6 +1,6 @@
 # Logits processing and sampling pipeline
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-09-17
 
 ## Where this problem is isolated
@@ -323,6 +323,4 @@ Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
 
 | Date       | Change            | By                 |
 |------------|-------------------|--------------------|
-| 2026-09-17 | Initial proposal  | Aleksei Kolesnikov |
-| 2026-09-17 | CodeRabbit review: defined the all-masked-logits fallback (never mask EOS, plus a defensive backstop returning EOS if it happens anyway), specified the `_scratch` buffer mechanics processors need, corrected the `GenerationOptions` consequence — a `= null` default makes the addition safe, not risky | Aleksei Kolesnikov |
-| 2026-09-17 | CodeRabbit review, round 2: `SamplingPipeline` needs its own `eosTokenId` constructor parameter — the all-masked fallback lives in `Sample`, not in a processor, so `BannedSequenceLogitsProcessor` knowing EOS internally doesn't reach it. Corrected the buffer note: stochastic's existing `_scratch` copy was never going away, only greedy's *new* copy (when processors are registered) is new cost | Aleksei Kolesnikov |
+| 2026-09-17 | Proposed; refined through two CodeRabbit rounds (all-masked-logits EOS fallback, `_scratch` buffer mechanics, `eosTokenId` threaded into `SamplingPipeline`); accepted once Phase B shipped exactly as designed — `ILogitsProcessor`, `BannedSequenceLogitsProcessor`, `--ban-words`/`INFERENCE_BAN_WORDS`, 14 new tests (113 total), golden-logit hashes unchanged, CLI smoke-tested | Aleksei Kolesnikov |

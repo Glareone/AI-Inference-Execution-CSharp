@@ -50,7 +50,14 @@ try
         return 0;
     }
 
-    var generationOptions = new GenerationOptions(options.MaxTokens, options.Temperature, options.TopK, options.TopP, options.Seed, options.Raw);
+    var generationOptions = new GenerationOptions(
+        MaxNewTokens: options.MaxTokens,
+        Temperature: options.Temperature,
+        TopK: options.TopK,
+        TopP: options.TopP,
+        Seed: options.Seed,
+        Raw: options.Raw,
+        BannedWords: options.BannedWords);
 
     var tokenCount = 0;
     var genElapsed = Timed.Run(() =>

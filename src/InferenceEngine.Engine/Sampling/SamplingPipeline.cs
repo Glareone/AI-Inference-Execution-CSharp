@@ -5,15 +5,19 @@ namespace InferenceEngine.Engine.Sampling;
 internal sealed class SamplingPipeline
 {
     private readonly List<ISamplerStep> _steps = [];
+    private readonly IReadOnlyList<ILogitsProcessor> _processors;
+    private readonly int _eosTokenId;
     private readonly Random _random;
     private readonly bool _greedy;
     private readonly float[] _scratch;
 
-    public SamplingPipeline(GenerationOptions options, int vocabSize)
+    public SamplingPipeline(GenerationOptions options, int vocabSize, IReadOnlyList<ILogitsProcessor> processors, int eosTokenId)
     {
         _greedy = options.Temperature <= 0f;
         _random = options.Seed is { } seed ? new Random(seed) : new Random();
         _scratch = new float[vocabSize];
+        _processors = processors;
+        _eosTokenId = eosTokenId;
 
         if (!_greedy)
         {
@@ -30,14 +34,32 @@ internal sealed class SamplingPipeline
         }
     }
 
-    public int Sample(ReadOnlySpan<float> logits)
+    public int Sample(ReadOnlySpan<float> logits, ReadOnlySpan<int> generatedTokenIds)
     {
         if (_greedy)
         {
-            var best = 0;
-            for (var i = 1; i < logits.Length; i++)
+            var candidate = logits;
+            if (_processors.Count > 0)
             {
-                if (logits[i] > logits[best])
+                var maskedWorking = _scratch.AsSpan(0, logits.Length);
+                logits.CopyTo(maskedWorking);
+                foreach (var processor in _processors)
+                {
+                    processor.Apply(maskedWorking, generatedTokenIds);
+                }
+
+                if (AllNegativeInfinity(maskedWorking))
+                {
+                    return _eosTokenId;
+                }
+
+                candidate = maskedWorking;
+            }
+
+            var best = 0;
+            for (var i = 1; i < candidate.Length; i++)
+            {
+                if (candidate[i] > candidate[best])
                 {
                     best = i;
                 }
@@ -48,9 +70,19 @@ internal sealed class SamplingPipeline
 
         var working = _scratch.AsSpan(0, logits.Length);
         logits.CopyTo(working);
+        foreach (var processor in _processors)
+        {
+            processor.Apply(working, generatedTokenIds);
+        }
+
         foreach (var step in _steps)
         {
             step.Apply(working);
+        }
+
+        if (AllNegativeInfinity(working))
+        {
+            return _eosTokenId;
         }
 
         var max = float.NegativeInfinity;
@@ -81,5 +113,18 @@ internal sealed class SamplingPipeline
         }
 
         return working.Length - 1;
+    }
+
+    private static bool AllNegativeInfinity(ReadOnlySpan<float> values)
+    {
+        foreach (var v in values)
+        {
+            if (v != float.NegativeInfinity)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

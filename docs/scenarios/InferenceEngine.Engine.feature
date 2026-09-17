@@ -1,6 +1,7 @@
-Feature: Generation orchestration - KV-cache, sampling, prompt assembly, and streamed decoding
-  InferenceEngine.Engine owns the generation loop: the KV-cache, the sampling pipeline, the
-  chat prompt template, and turning generated token ids into correctly-decoded streamed text.
+Feature: Generation orchestration - KV-cache, logits processing, sampling, prompt assembly, and streamed decoding
+  InferenceEngine.Engine owns the generation loop: the KV-cache, a deterministic logits-processor
+  phase (hard constraints such as banning) that runs before the probabilistic sampling pipeline,
+  the chat prompt template, and turning generated token ids into correctly-decoded streamed text.
 
   Scenario: The KV-cache keeps every layer and position independent
     Given a KV-cache with more than one layer and more than one position
@@ -33,6 +34,28 @@ Feature: Generation orchestration - KV-cache, sampling, prompt assembly, and str
     Given a set of logits passed into the sampler
     When a token is sampled
     Then the original logits values are unchanged afterward
+
+  Scenario: Banning a token sequence excludes it even under greedy decoding
+    Given a temperature of zero and a logits processor banning the single highest-logit token
+    When a token is sampled
+    Then the banned token is never returned, and the next-highest surviving token is returned instead
+
+  Scenario: A banned multi-token sequence is only masked once its prefix has actually been generated
+    Given a banned sequence of more than one token
+    When a token is sampled after only some, not all, of that sequence's prefix has been generated
+    Then the sequence's completing token is not excluded
+    When a token is sampled after the full prefix has been generated in order
+    Then the sequence's completing token is excluded
+
+  Scenario: The EOS token can never be banned
+    Given a banned sequence that names the EOS token, either directly or as its completing token
+    When that sequence's ban would otherwise apply
+    Then the EOS token's logit is left unchanged
+
+  Scenario: Generation falls back to EOS when every other token is masked
+    Given every non-EOS token excluded by logits processors
+    When a token is sampled, under greedy decoding or under stochastic sampling
+    Then the EOS token is returned instead of an arbitrary index
 
   Scenario: The chat prompt is assembled in system, user, assistant-priming order
     Given a system prompt and a user prompt
