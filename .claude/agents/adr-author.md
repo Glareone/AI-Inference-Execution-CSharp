@@ -24,14 +24,24 @@ reviewing.
 1. Read `docs/architecture/template.md` and any existing ADRs that touch the same area, so the
    new one is consistent in tone and doesn't silently contradict a prior decision.
 2. Fill in every section of the template — don't skip "Considered Options" or "Pros and Cons"
-   even when the decision feels obvious to you. The point of the record is to preserve *why*
-   the alternatives were rejected, for a future reader (human or AI) who wasn't in this
-   conversation.
-   **Consequences is not a Considered-Options recap.** Considered Options and Pros/Cons argue the
-   case; Consequences reports the verdict. Write it as: what changed, what a future engineer must
-   now do differently, what limitation they now accept, and how to work within it day to day. A
-   bullet that just restates a Pros/Cons line is a bug — cut it or make it operational (a number,
-   a file, a required follow-up, a rule to follow next time this comes up).
+   even when the decision feels obvious to you — but **weight the sections unevenly on purpose.**
+   An ADR is short. Considered Options and Decision Outcome exist to name the fork and say which
+   way it went; they are not the place to argue the case at length. One line per option in
+   Considered Options (what it is, in five to ten words). Decision Outcome: which one, and the
+   single decisive reason — not a paragraph re-litigating each rejected option's tradeoffs. Pros
+   and Cons: a few bullets per option, terse, no restated reasoning from Decision Outcome.
+   **Consequences is where the real content and the real length go.** It is not a
+   Considered-Options recap — Considered Options and Pros/Cons argue the case, Consequences
+   reports the verdict: what changed, what a future engineer must now do differently, what
+   limitation they now accept, how to work within it day to day. A bullet that just restates a
+   Pros/Cons line is a bug — cut it or make it operational (a number, a file, a required
+   follow-up, a rule to follow next time this comes up).
+   **The single biggest failure mode to avoid: making the same point more than once across
+   Decision Drivers, Decision Outcome, Pros/Cons, and Consequences.** State a piece of reasoning
+   in exactly one of those sections — pick the one it belongs to most (usually Consequences for
+   anything operational, Decision Outcome for the one decisive reason) — and reference it from
+   elsewhere ("see Consequences") rather than re-explaining it. If you notice yourself writing a
+   justification you already wrote two sections ago, delete the second copy.
 3. Name the file `YYMMDD-<slug>.md`, using today's date as the prefix. Status starts as `proposed`
    unless the user has already explicitly confirmed the decision, in which case `accepted`.
 4. When an option involves a specific library, framework, or API (e.g. a tokenizer or GGUF
@@ -70,6 +80,10 @@ Check for, and flag:
   but weren't anticipated in the ADR.
 - Consequences bullets that just restate Considered Options/Pros-and-Cons instead of reporting
   what actually changed and how to live with it operationally.
+- The same reasoning stated more than once across Decision Drivers/Decision Outcome/Pros-and-
+  Cons/Consequences — a long ADR is usually this bug, not genuinely more content. Considered
+  Options and Decision Outcome should each be a few lines; if either reads like an essay, that's
+  a finding.
 - Stale status (e.g. an ADR marked `proposed` that the code has clearly already implemented).
 - **A missing, empty, or stale "Decision Log" table.** Every ADR must end with one; if a later
   amendment to the ADR isn't reflected there, that's a finding too, not just an omission at

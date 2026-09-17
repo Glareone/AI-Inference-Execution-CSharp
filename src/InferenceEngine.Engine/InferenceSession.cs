@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using InferenceEngine.Core;
 using InferenceEngine.Engine.Config;
 using InferenceEngine.Engine.Prompting;
@@ -136,8 +137,12 @@ public sealed class InferenceSession
     private IEnumerable<GeneratedToken> GenerateCore(IReadOnlyList<int> promptIds, GenerationOptions options)
     {
         var kv = CreateKvCache();
-        var sampler = new SamplingPipeline(options, Config.VocabSize);
+        IReadOnlyList<ILogitsProcessor> processors = options.BannedWords is { Count: > 0 } words
+            ? [BannedSequenceLogitsProcessor.FromWords(_tokenizer, words)]
+            : [];
+        var sampler = new SamplingPipeline(options, Config.VocabSize, processors, _tokenizer.EosTokenId);
         var decoder = new IncrementalUtf8Decoder();
+        var generatedIds = new List<int>();
 
         var position = 0;
         var logits = default(ReadOnlySpan<float>);
@@ -149,12 +154,13 @@ public sealed class InferenceSession
 
         for (var step = 0; step < options.MaxNewTokens; step++)
         {
-            var nextId = sampler.Sample(logits);
+            var nextId = sampler.Sample(logits, CollectionsMarshal.AsSpan(generatedIds));
             if (nextId == _tokenizer.EosTokenId)
             {
                 yield break;
             }
 
+            generatedIds.Add(nextId);
             yield return new GeneratedToken(nextId, decoder.DecodeNext(_tokenizer.GetTokenBytes(nextId)));
 
             if (step == options.MaxNewTokens - 1)

@@ -11,4 +11,12 @@ public sealed record GenerationOptions(
     float TopP = 0f,
     int? Seed = null,
     /// <summary>Skip the ChatML wrapping and encode the prompt text as-is.</summary>
-    bool Raw = false);
+    bool Raw = false,
+    /// <summary>
+    /// Literal strings to ban from generated output; each is tokenized once at session setup.
+    /// A word that BPE-splits into more than one token requires that exact token sequence to
+    /// appear consecutively in the generated output to be blocked. The caller supplies exact
+    /// variants (e.g. <c>"EPAM"</c>, <c>"EPAM "</c>) — there is no automatic case/whitespace
+    /// derivation.
+    /// </summary>
+    IReadOnlyList<string>? BannedWords = null);

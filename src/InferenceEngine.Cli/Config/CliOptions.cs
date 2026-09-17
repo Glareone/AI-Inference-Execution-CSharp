@@ -19,16 +19,17 @@ internal sealed record CliOptions(
     bool Raw,
     bool Stats,
     bool DebugTokenize,
-    bool DebugLogits)
+    bool DebugLogits,
+    IReadOnlyList<string>? BannedWords)
 {
     private const string EnvPrefix = "INFERENCE_";
 
     public const string UsageText =
         "Usage: InferenceEngine.Cli --model <path.gguf> --prompt \"...\" " +
         "[--max-tokens N] [--temperature T] [--top-k K] [--top-p P] [--seed N] " +
-        "[--raw] [--stats] [--debug-tokenize] [--debug-logits]\n" +
+        "[--raw] [--stats] [--debug-tokenize] [--debug-logits] [--ban-words \"W1,W2\"]\n" +
         "Any option may instead be set via a .env file or environment variable, " +
-        "e.g. INFERENCE_MODEL, INFERENCE_PROMPT, INFERENCE_MAX_TOKENS.";
+        "e.g. INFERENCE_MODEL, INFERENCE_PROMPT, INFERENCE_MAX_TOKENS, INFERENCE_BAN_WORDS.";
 
     /// <param name="loadDotEnv">
     /// When <c>false</c>, skips reading <c>.env</c> files entirely, so tests can exercise the
@@ -54,6 +55,7 @@ internal sealed record CliOptions(
         var stats = ParseBool(GetEnv("STATS"), EnvPrefix + "STATS") ?? false;
         var debugTokenize = false;
         var debugLogits = false;
+        var bannedWords = SplitBannedWords(GetEnv("BAN_WORDS"));
 
         for (var i = 0; i < args.Length; i++)
         {
@@ -70,6 +72,7 @@ internal sealed record CliOptions(
                 case "--stats": stats = true; break;
                 case "--debug-tokenize": debugTokenize = true; break;
                 case "--debug-logits": debugLogits = true; break;
+                case "--ban-words": bannedWords = SplitBannedWords(NextValue(args, ref i)); break;
                 default: throw new ArgumentException($"Unknown argument: {args[i]}");
             }
         }
@@ -79,10 +82,15 @@ internal sealed record CliOptions(
             throw new ArgumentException("--model (or INFERENCE_MODEL) is required.");
         }
 
-        return new CliOptions(modelPath, prompt, maxTokens, temperature, topK, topP, seed, raw, stats, debugTokenize, debugLogits);
+        return new CliOptions(modelPath, prompt, maxTokens, temperature, topK, topP, seed, raw, stats, debugTokenize, debugLogits, bannedWords);
     }
 
     private static string? GetEnv(string suffix) => Environment.GetEnvironmentVariable(EnvPrefix + suffix);
+
+    // No trimming: a trailing space in a banned entry (e.g. "EPAM ") is a meaningfully different
+    // literal from "EPAM", not incidental whitespace to clean up.
+    private static IReadOnlyList<string>? SplitBannedWords(string? value) =>
+        value is null ? null : value.Split(',');
 
     private static string NextValue(string[] args, ref int i)
     {

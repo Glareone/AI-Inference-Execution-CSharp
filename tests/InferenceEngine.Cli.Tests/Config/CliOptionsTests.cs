@@ -19,7 +19,7 @@ public class CliOptionsTests : IDisposable
 {
     private static readonly string[] EnvSuffixes =
     [
-        "MODEL", "PROMPT", "MAX_TOKENS", "TEMPERATURE", "TOP_K", "TOP_P", "SEED", "RAW", "STATS",
+        "MODEL", "PROMPT", "MAX_TOKENS", "TEMPERATURE", "TOP_K", "TOP_P", "SEED", "RAW", "STATS", "BAN_WORDS",
     ];
 
     private readonly Dictionary<string, string?> _originalEnv = new();
@@ -149,6 +149,44 @@ public class CliOptionsTests : IDisposable
             CliOptions.Load(["--model", "m.gguf", "--temperature", "0,7"], loadDotEnv: false));
 
         Assert.Contains("--temperature", ex.Message);
+    }
+
+    [Fact]
+    public void Load_BanWordsFlag_SplitsOnCommaWithoutTrimmingEntries()
+    {
+        var options = CliOptions.Load(["--model", "m.gguf", "--ban-words", "EPAM,EPAM ,E"], loadDotEnv: false);
+
+        Assert.Equal(["EPAM", "EPAM ", "E"], options.BannedWords);
+    }
+
+    [Fact]
+    public void Load_UsesBanWordsEnvironmentVariable_WhenNoFlagIsGiven()
+    {
+        Environment.SetEnvironmentVariable("INFERENCE_BAN_WORDS", "EPAM,EPAM ,E");
+
+        var options = CliOptions.Load(["--model", "m.gguf"], loadDotEnv: false);
+
+        Assert.Equal(["EPAM", "EPAM ", "E"], options.BannedWords);
+    }
+
+    [Fact]
+    public void Load_BanWordsFlagOverridesBanWordsEnvironmentVariable()
+    {
+        Environment.SetEnvironmentVariable("INFERENCE_BAN_WORDS", "FromEnv");
+
+        var options = CliOptions.Load(["--model", "m.gguf", "--ban-words", "FromFlag"], loadDotEnv: false);
+
+        Assert.Equal(["FromFlag"], options.BannedWords);
+    }
+
+    [Fact]
+    public void Load_WithoutBanWordsFlagOrEnvironmentVariable_BannedWordsIsNull()
+    {
+        // Pins the "feature is fully off by default" contract: GenerateCore treats null/empty
+        // as "no logits processors", so this is what keeps banning opt-in.
+        var options = CliOptions.Load(["--model", "m.gguf"], loadDotEnv: false);
+
+        Assert.Null(options.BannedWords);
     }
 
     [Fact]

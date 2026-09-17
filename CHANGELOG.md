@@ -162,6 +162,66 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Retired `docs/architecture/planned-sampling-pipeline.md` (placeholder, `Status: planned`),
   superseded by `260917-logits-processing.md` — same pattern as the KV-cache round retiring
   `planned-kv-cache.md`.
+- CI: `.github/workflows/tests.yml` restores, builds, and runs `dotnet test` on every push to
+  `main` and every pull request (public repo, so this is free on GitHub Actions — unlimited
+  minutes, no billing setup needed). The two golden-hash tests skip cleanly in CI, by design —
+  they need a real ~270 MB GGUF model file that isn't checked into the repo. Added a status badge
+  to the top of `README.md`.
+- **Logits processing, Phase B**: implements the design from
+  [260917-logits-processing.md](docs/architecture/260917-logits-processing.md).
+  - `ILogitsProcessor` (`InferenceEngine.Engine.Sampling`, new): one method,
+    `Apply(Span<float> logits, ReadOnlySpan<int> generatedTokenIds)`, documented to never mask
+    EOS. `BannedSequenceLogitsProcessor` (new) implements it: a length-1 banned sequence is always
+    masked to `float.NegativeInfinity`; a longer sequence is masked only when the tail of
+    `generatedTokenIds` matches its prefix, HuggingFace `NoBadWordsLogitsProcessor`-style. Its
+    `FromWords(ITokenizer, IReadOnlyList<string>)` factory tokenizes each banned word once, at
+    session-configuration time, and drops any word that encodes to zero tokens or to a single
+    EOS token.
+  - `SamplingPipeline`'s constructor now also takes `IReadOnlyList<ILogitsProcessor> processors`
+    and `int eosTokenId`; `Sample` gains a `ReadOnlySpan<int> generatedTokenIds` parameter and
+    runs every processor unconditionally, before the greedy/stochastic branch splits — previously
+    the greedy path (`Temperature: 0`, the default) skipped `ISamplerStep`s entirely, so a ban
+    could only ever reach the non-default stochastic path. Greedy now also copies logits into its
+    scratch buffer when at least one processor is registered (unchanged, zero-copy, otherwise).
+    Both paths now return `eosTokenId` directly if every logit is `float.NegativeInfinity` after
+    processors run — a defensive backstop against picking an arbitrary (possibly banned) index;
+    on the stochastic path this also closes a real bug, not just a hypothetical one:
+    `Exp(-inf - -inf)` is `NaN`, and NaN comparisons are always `false`, so the pre-fix
+    cumulative-probability loop fell through to `working.Length - 1`.
+  - `GenerationOptions` gains `IReadOnlyList<string>? BannedWords = null`.
+  - `InferenceSession.GenerateCore` builds the processor list from `options.BannedWords` (empty
+    when null/empty), constructs `SamplingPipeline` with it and `_tokenizer.EosTokenId`, and
+    tracks generated-token history across the decode loop to pass into `Sample`.
+  - `InferenceEngine.Cli`: new `--ban-words "W1,W2"` flag / `INFERENCE_BAN_WORDS` environment
+    variable, comma-split with **no** trimming (a trailing space in an entry, e.g. `"EPAM "`, is
+    a meaningfully different literal from `"EPAM"`, not incidental whitespace) — same
+    flag-beats-env precedence as every other option. `Program.cs`'s `GenerationOptions`
+    construction switched from positional to named arguments while here, since a positional
+    record with every parameter defaulted silently reassigns values if a future field lands out
+    of order.
+  - 14 new tests (113 total, all passing): `BannedSequenceLogitsProcessor`'s masking rules (always
+    masked for a length-1 sequence, prefix-matched for a longer one, independent sequences not
+    interfering, a sequence longer than history not throwing, EOS never masked either directly or
+    as a completing token, `FromWords` dropping an EOS-only word), the critical greedy-path ban
+    regression, the all-masked-EOS-fallback on both the greedy and stochastic paths (the latter
+    constructed so it actually exercises the NaN path, not just "EOS happens to be the only
+    finite logit"), and `CliOptions` coverage for `--ban-words`/`INFERENCE_BAN_WORDS` parsing,
+    precedence, and the off-by-default (`null`) case. `GoldenLogitBaselineTests`' hashes are
+    unchanged (banning is opt-in) — verified against the real model.
+- CodeRabbit review of the CI workflow and Phase B docs/tests:
+  - `.github/workflows/tests.yml` — added `permissions: contents: read` at the workflow level (a
+    push run otherwise inherits repo/org defaults, which may be broader) and
+    `persist-credentials: false` on the checkout step; pinned `actions/checkout`/
+    `actions/setup-dotnet` to immutable commit SHAs (verified via `git ls-remote` against the
+    upstream repos, not from memory) instead of the mutable `@v4` tag, with the human-readable
+    version kept in a trailing comment.
+  - `README.md`'s `--ban-words "Machine"` example reworded — it bans the exact token *sequence*
+    `"Machine"` encodes to, not the lexical word across every surrounding tokenization context;
+    the original phrasing overstated the guarantee.
+  - Trimmed `SamplingPipelineTests.cs`'s class doc comment to the two facts not obvious from the
+    test names/assertions themselves (processors must run on the greedy path since `_steps` is
+    skipped there; the pipeline must not mutate a reused caller buffer) — removed the restated
+    per-test outcome descriptions.
 
 ### Fixed
 

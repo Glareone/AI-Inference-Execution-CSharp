@@ -1,0 +1,36 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore InferenceEngine.sln
+
+      - name: Build
+        run: dotnet build InferenceEngine.sln --no-restore
+
+      - name: Test
+        # INFERENCE_MODEL is intentionally left unset here: the two golden-hash tests
+        # (tests/InferenceEngine.Models.Tests/Llama/GoldenLogitBaselineTests.cs) need a real
+        # ~270 MB GGUF model file that isn't checked into the repo, and are designed to skip
+        # cleanly (not fail) when it's absent. Every other test runs and must pass.
+        run: dotnet test InferenceEngine.sln --no-build

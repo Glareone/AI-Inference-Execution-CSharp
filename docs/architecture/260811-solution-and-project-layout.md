@@ -1,6 +1,6 @@
 # Solution and project layout
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-11
 
 ## Context and Problem Statement
@@ -166,3 +166,4 @@ Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
 | 2026-08-11 | Initial proposal  | Aleksei Kolesnikov  |
 | 2026-09-01 | Renamed to the `YYMMDD-<slug>` convention; corrected dotLLM project count (10 → ~17); added a project-reference diagram and a "which project is responsible for what" table; moved the engineering challenges, external-dependency flow, and reference-project comparison out to the new challenges ADR (260901) | Aleksei Kolesnikov |
 | 2026-09-17 | Noted the logits-processor/sampler split inside Engine (see 260917-logits-processing.md); labeled the project-reference diagram as a C4 Container diagram | Aleksei Kolesnikov |
+| 2026-09-17 | Status: proposed → accepted — this layout has been the actual codebase since 2026-08-11, unchanged through two extension rounds (260914, 260917) that amended it rather than reversing it | Aleksei Kolesnikov |
