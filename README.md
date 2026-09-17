@@ -22,6 +22,52 @@ every component is understood deeply enough to explain to anyone.
 Each topic is documented as an ADR (Architecture Decision Record) in `docs/architecture/`,
 capturing both what we learned and what we decided for our implementation.
 
+## Architecture
+
+Start with the [solution-layout ADR](docs/architecture/260811-solution-and-project-layout.md) —
+project boundaries, what each project owns, why. The diagram below is the runtime pipeline that
+layout supports: one prompt in, one streamed response out.
+
+```mermaid
+flowchart TB
+    prompt["Prompt text"] --> encode
+
+    subgraph tok["InferenceEngine.Tokenizers"]
+        encode["Encode: text to token ids"]
+        decode["Decode: token ids to text"]
+    end
+
+    subgraph mod["InferenceEngine.Models"]
+        forward["Forward pass: embed, RoPE, GQA attention, SwiGLU, logits"]
+    end
+
+    subgraph eng["InferenceEngine.Engine"]
+        kv["KV-cache: paged, head-major"]
+        processor["Logits Processor, planned: ban token sequences"]
+        sampler["Sampler: temperature, top-k, top-p"]
+    end
+
+    encode --> forward
+    forward --> kv
+    kv --> forward
+    forward --> processor --> sampler
+    sampler -->|next token, loop| forward
+    sampler -->|EOS or max tokens| decode
+    decode --> output["Streamed text"]
+```
+
+- **Models supported**: Llama-architecture GGUF only (SmolLM2-135M-Instruct confirmed working),
+  F32/F16 tensors only. No quantized dequantization, no Mistral/Qwen/Phi yet — see
+  [Known limitations](#known-limitations).
+- **Input supported**: a text prompt via CLI flag, environment variable, or `.env`; ChatML-templated
+  by default or raw; generation controlled by temperature, top-k, top-p, seed, and max tokens.
+- **What we protect against**: the Logits Processor stage above is *designed, not yet built* — see
+  [260917-logits-processing.md](docs/architecture/260917-logits-processing.md) and the
+  [Phase B plan](docs/investigation/status.md). Once implemented, it lets a caller ban specific
+  token *sequences* (e.g. a competitor's name) from ever being generated, enforced deterministically
+  on every decode step — including the default greedy path, where today's sampler chain is silently
+  skipped entirely.
+
 ## References & Inspiration
 
 ### Primary Reference
@@ -212,9 +258,32 @@ history and [CHANGELOG.md](CHANGELOG.md) for the detailed change-by-change log.
 
 - [AGENTS.md](AGENTS.md) — ground rules for any AI coding assistant (stack, `unsafe` policy,
   ADR process)
-- [CLAUDE.md](CLAUDE.md) — Claude Code–specific config (subagents, hooks)
-- [docs/architecture/](docs/architecture/) — architecture decisions in [MADR](https://adr.github.io/madr/) format
-- [docs/investigation/](docs/investigation/) — research notes and architecture traces
-- [docs/scenarios/](docs/scenarios/) — Gherkin (`.feature`) business-scenario specs, one per `src/` project
-- [experiments/](experiments/) — benchmark data and reference measurements
+- [CLAUDE.md](CLAUDE.md) — Claude Code–specific config (subagents, skills)
+- **Architecture decisions** ([docs/architecture/](docs/architecture/),
+  [MADR](https://adr.github.io/madr/) format) — see the
+  [Architecture decisions](#architecture-decisions) table above for every ADR and its status.
+- **Investigation notes** ([docs/investigation/](docs/investigation/)):
+  - [overview.md](docs/investigation/overview.md) — goals, references, topic map
+  - [status.md](docs/investigation/status.md) — live done/next tracker, including the Phase B
+    implementation plan for logits processing
+  - [dotllm-architecture-trace.md](docs/investigation/dotllm-architecture-trace.md) — dotLLM's own
+    architecture, traced
+  - [gguf-format-research.md](docs/investigation/gguf-format-research.md) — GGUF binary format,
+    quantization types
+  - [huggingface-ecosystem.md](docs/investigation/huggingface-ecosystem.md) — GGUF providers, Hub
+    API, download options
+  - [inference-engine-project-layouts.md](docs/investigation/inference-engine-project-layouts.md) —
+    how other engines structure their projects
+  - [kv-cache-research.md](docs/investigation/kv-cache-research.md) — the five eras of KV-cache
+    design, this engine's choice
+- **Business scenarios** ([docs/scenarios/](docs/scenarios/), Gherkin `.feature`, one per `src/`
+  project): [Core](docs/scenarios/InferenceEngine.Core.feature),
+  [Models](docs/scenarios/InferenceEngine.Models.feature),
+  [Tokenizers](docs/scenarios/InferenceEngine.Tokenizers.feature),
+  [Engine](docs/scenarios/InferenceEngine.Engine.feature),
+  [Cli](docs/scenarios/InferenceEngine.Cli.feature)
+- **Benchmarks** ([experiments/](experiments/)):
+  [reference-measurements-dotllm.md](experiments/reference-measurements-dotllm.md),
+  [kv-layout-benchmark.md](experiments/kv-layout-benchmark.md)
+- [CHANGELOG.md](CHANGELOG.md) — notable changes, change by change
 - [CHANGELOG.md](CHANGELOG.md) — notable changes

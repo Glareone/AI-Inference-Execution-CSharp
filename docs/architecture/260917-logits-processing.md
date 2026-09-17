@@ -164,19 +164,38 @@ guarantee a given step provides.
   ```csharp
   internal interface ILogitsProcessor
   {
+      /// <summary>
+      /// Implementations must never mask the EOS token to -infinity. This guarantees at least
+      /// one valid choice always survives, so generation can end instead of erroring or picking
+      /// an arbitrary (possibly banned) token when every other position is masked.
+      /// </summary>
       void Apply(Span<float> logits, ReadOnlySpan<int> generatedTokenIds);
   }
   ```
 
 - **`BannedSequenceLogitsProcessor`** implements it: a length-1 banned sequence is always masked
   to `float.NegativeInfinity`; a longer sequence is masked only when `generatedTokenIds`'s tail
-  matches the sequence's prefix — the same algorithm as HuggingFace's
-  `NoBadWordsLogitsProcessor`.
+  matches the sequence's prefix — the same algorithm as HuggingFace's `NoBadWordsLogitsProcessor`.
+  It never masks the EOS token id (read from `ITokenizer.EosTokenId` at construction), matching
+  HF's own `NoBadWordsLogitsProcessor`, which filters banned sequences equal to EOS for the same
+  reason.
 - **`BannedSequenceLogitsProcessor.FromWords(ITokenizer, IReadOnlyList<string>)`** — a factory that
   tokenizes literal ban strings once, at session-configuration time, rather than per generated
   token. Takes `Core.ITokenizer` by interface, not the `Tokenizers` project — `Engine` already
   references `Tokenizers` and holds a live tokenizer instance for encode/decode, so this adds no
   new project dependency, only a new use of one that already exists.
+- **All-masked fallback**: `SamplingPipeline.Sample` returns EOS directly if, after every
+  processor has run, every logit is `float.NegativeInfinity` — a defensive backstop, not the
+  primary guarantee (the EOS-never-masked rule above is). Both branches need this check: greedy's
+  `best = 0` scan and the stochastic softmax's `NaN`-from-`Exp(-inf - -inf)` path both currently
+  return an arbitrary index with no such guard, which could be a banned token.
+- **Buffer**: `ILogitsProcessor.Apply` needs `Span<float>` (writable); `Sample` takes
+  `ReadOnlySpan<float>` and today only the stochastic branch copies into `_scratch`. When at least
+  one processor is registered, `Sample` copies into `_scratch` unconditionally, before the
+  greedy/stochastic split, runs every processor against it, then greedy argmaxes over `_scratch`
+  instead of the raw input. When no processors are registered (the common case — no bans
+  configured), the copy is skipped entirely and both paths behave exactly as they do today: zero
+  added cost when the feature isn't in use.
 - **`SamplingPipeline.Sample`** gains a `ReadOnlySpan<int> generatedTokenIds` parameter and runs
   every registered `ILogitsProcessor` unconditionally, before the greedy/stochastic branch
   splits. This is the one behavioral change this whole ADR exists to make correct — today a ban
@@ -215,13 +234,17 @@ Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
   If logits processing grows well past banning (multiple processor types, per-processor
   configuration, a plugin registry), that growth — not this ADR's initial scope — would be the
   trigger to revisit Option A.
-- 🔴 `GenerationOptions` is a positional record consumed positionally at
-  `src/InferenceEngine.Cli/Program.cs:53` (`new GenerationOptions(options.MaxTokens,
-  options.Temperature, options.TopK, options.TopP, options.Seed, options.Raw)`). Adding
-  `BannedWords` must append it at the end of the parameter list, or that call site breaks
-  silently rather than with a compile error, since positional record construction doesn't name
-  its arguments. This is a known, small, separate fragility — noted here, fixed as part of
-  implementation, not by this ADR.
+- 🟡 `BannedWords` needs a `= null` default. All six existing `GenerationOptions` parameters
+  already default, and C# rejects a required parameter after an optional one — so this isn't
+  optional, it's a compile error without it. With the default, appending `BannedWords` at the end
+  is fully backward-compatible: the existing six-argument call at
+  `src/InferenceEngine.Cli/Program.cs:53` keeps compiling unchanged and receives `null`. No break,
+  silent or otherwise, from this specific addition.
+- 🔴 The underlying fragility is general, not caused by this ADR: a positional record with every
+  parameter defaulted means a *future* field inserted anywhere but the end — or one whose type
+  happens to match its neighbor — could silently reassign values with no compile error. Phase B
+  fixes this preventatively by switching `Program.cs:53` to named arguments, not because
+  `BannedWords` itself breaks anything.
 
 ## Pros and Cons of the Options
 
@@ -294,3 +317,4 @@ Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
 | Date       | Change            | By                 |
 |------------|-------------------|--------------------|
 | 2026-09-17 | Initial proposal  | Aleksei Kolesnikov |
+| 2026-09-17 | CodeRabbit review: defined the all-masked-logits fallback (never mask EOS, plus a defensive backstop returning EOS if it happens anyway), specified the `_scratch` buffer mechanics processors need, corrected the `GenerationOptions` consequence — a `= null` default makes the addition safe, not risky | Aleksei Kolesnikov |

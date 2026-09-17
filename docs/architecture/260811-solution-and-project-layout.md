@@ -92,7 +92,7 @@ other three C4 levels for it would be ceremony without payoff.
 
 ```mermaid
 flowchart TB
-    cli["Cli (Exe)"] --> engine["Engine<br/>(sampling + logits processing)"]
+    cli["Cli (Exe)"] --> engine["Engine (sampling + logits processing)"]
     engine --> models["Models"]
     engine --> tok["Tokenizers"]
     engine --> core["Core"]

@@ -65,15 +65,30 @@ main first; implementation is the next round. Do steps 1-3 before 4-7 — they'r
 2. `src/InferenceEngine.Engine/Sampling/BannedSequenceLogitsProcessor.cs` — new. Implements
    `ILogitsProcessor`. Length-1 banned sequence: always mask to `-inf`. Longer sequence: mask only
    when `generatedTokenIds`'s tail matches its prefix (HuggingFace `NoBadWordsLogitsProcessor`
-   algorithm). Factory `FromWords(ITokenizer, IReadOnlyList<string>)` tokenizes each banned word
-   once, at construction — not per generated token.
+   algorithm). **Never masks EOS** (read from `ITokenizer.EosTokenId` at construction) — same
+   guard HF uses, and the reason is not cosmetic: see step 3's all-masked fallback. Factory
+   `FromWords(ITokenizer, IReadOnlyList<string>)` tokenizes each banned word once, at
+   construction — not per generated token.
 3. `src/InferenceEngine.Engine/Sampling/SamplingPipeline.cs` — edit. Constructor takes
    `IReadOnlyList<ILogitsProcessor>`. `Sample` gains `ReadOnlySpan<int> generatedTokenIds`. Run
    every processor unconditionally, before the greedy/stochastic branch splits. This is the actual
    fix: today the greedy path (`Temperature<=0`, the default) skips `_steps` entirely — a ban must
    not skip.
+   - **Buffer**: `Apply` needs `Span<float>`; `Sample` takes `ReadOnlySpan<float>` and today only
+     copies to `_scratch` in the stochastic branch. When ≥1 processor is registered, copy to
+     `_scratch` unconditionally before the branch splits, run processors, then have greedy argmax
+     over `_scratch` instead of the raw input. Zero processors → skip the copy, both paths behave
+     exactly as today (no added cost when the feature isn't in use).
+   - **All-masked fallback**: if every logit is `-inf` after processors run, return EOS directly.
+     Today greedy's `best = 0` scan and the stochastic path's `Exp(-inf - -inf) = NaN` (NaN
+     comparisons are always `false`, so it falls through to `working.Length - 1`) both return an
+     arbitrary index with no such guard — verified against the actual code, this is a real bug,
+     not a hypothetical. Step 2's EOS-never-masked rule is the primary guarantee; this is the
+     defensive backstop.
 4. `src/InferenceEngine.Engine/Config/GenerationOptions.cs` — edit. Add
-   `IReadOnlyList<string>? BannedWords` at the end (positional record — order matters).
+   `IReadOnlyList<string>? BannedWords = null` at the end — the `= null` is required (a positional
+   record can't have a required parameter after an optional one; all six existing ones already
+   default), and with it the existing 6-argument call at `Program.cs:53` keeps compiling unchanged.
 5. `src/InferenceEngine.Engine/InferenceSession.cs` — edit. `GenerateCore` builds the processor
    list via `BannedSequenceLogitsProcessor.FromWords(_tokenizer, options.BannedWords ?? [])`,
    tracks generated-id history, passes it into `Sample`. `PrefillTopLogits` stays untouched — raw
@@ -85,9 +100,14 @@ main first; implementation is the next round. Do steps 1-3 before 4-7 — they'r
    breaks silently if a field lands out of order.
 8. Tests (`test-writer-runner` agent):
    - `BannedSequenceLogitsProcessor`: single-token always-banned; multi-token sequence-prefix
-     match; multiple independent sequences; a sequence longer than history doesn't crash.
+     match; multiple independent sequences; a sequence longer than history doesn't crash; banning
+     the EOS token id is a no-op (still not masked).
    - **Critical regression test**: banned tokens excluded on the default greedy path
      (`Temperature=0`). This is the one thing the whole redesign exists to make true.
+   - **All-masked fallback, both paths**: construct a pipeline where every non-EOS token is
+     banned (or force-mask via a test double) and assert `Sample` returns EOS in greedy mode
+     (`Temperature=0`) and in stochastic mode (`Temperature>0`) — this is the exact bug CodeRabbit
+     caught by reading the code, not by running it; prove it's fixed by running it.
    - `CliOptions` parsing test for the new flag.
    - `GoldenLogitBaselineTests` stays green — banning defaults to off, hashes shouldn't move.
 9. `CHANGELOG.md` + affected test project `README.md`s +

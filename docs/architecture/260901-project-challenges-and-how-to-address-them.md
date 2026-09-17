@@ -107,11 +107,11 @@ The one thing we cannot reuse-away is the model itself. Two external inputs feed
 
 ```mermaid
 flowchart TB
-    hub["HuggingFace Hub<br/>(model repos, e.g. bartowski)"]
-    nuget["NuGet packages (build-time)<br/>format parsing · tokenizer · math"]
+    hub["HuggingFace Hub (model repos, e.g. bartowski)"]
+    nuget["NuGet packages (build-time): format parsing, tokenizer, math"]
 
     subgraph disk["Local disk — fetched once, reused across runs"]
-        weights["model file(s)<br/>quantized weights +<br/>tokenizer + config"]
+        weights["model file(s): quantized weights, tokenizer, config"]
     end
 
     subgraph sln["InferenceEngine solution — net10.0"]
@@ -150,7 +150,7 @@ sequenceDiagram
     User->>Cli: run --model <path> --prompt "..."
     Cli->>Engine: CreateSession(modelPath, options)
     Engine->>Models: Load(path)
-    Note right of Models: parse header/metadata,<br/>mmap weight blob
+    Note right of Models: parse header/metadata, mmap weight blob
     Models-->>Engine: IModel + ModelConfig
     Engine->>Tok: Load(model metadata)
     Tok-->>Engine: ITokenizer
