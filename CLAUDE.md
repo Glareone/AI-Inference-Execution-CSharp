@@ -25,5 +25,7 @@ This project's ground rules (stack, `unsafe` policy, ADR process, working style)
   - `csharp-conventions` — per-project ownership/gotchas for `Core`/`Models`/`Tokenizers`/
     `Engine`/`Cli`, the KV-cache contract, and the context7 requirement. Preloaded into
     `csharp-dotnet`; also auto-discoverable when working with `.cs`/`.csproj` files generally.
+  - `caveman` — concise, specific writing: short sentences, no hedging, no filler. Preloaded into
+    every subagent, so ADRs, comments, commit messages, and reports back stay tight.
 - No hooks yet; configure them in `.claude/settings.json` as real, recurring needs show up —
   don't scaffold empty ones speculatively.

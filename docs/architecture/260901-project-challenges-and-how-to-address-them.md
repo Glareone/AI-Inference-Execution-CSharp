@@ -88,8 +88,8 @@ row gets its own future ADR:
 | Model loading | Reuse a parsing library; mmap the weight blob (no copy) | `Models` | [Format loading](planned-format-loading.md) |
 | Tokenization | Reuse a tokenizer library (BPE/SPM) | `Tokenizers` | [Tokenization](planned-tokenization.md) |
 | Transformer forward pass / attention | **Build** on top of a math library (no custom kernels) | `Models` (+ `Core` types) | [Attention & transformer](planned-attention-and-transformer.md) |
-| KV-cache | **Build** — start simple (contiguous), understand before optimizing | `Engine` | [KV-cache](planned-kv-cache.md) |
-| Sampling / logits | **Build** — composable temp/top-k/top-p chain | `Engine` | [Sampling pipeline](planned-sampling-pipeline.md) |
+| KV-cache | **Build** — start simple (contiguous), understand before optimizing | `Engine` | [KV-cache](260914-kv-cache.md) |
+| Sampling / logits | **Build** — composable temp/top-k/top-p chain, plus deterministic logits processing (e.g. banned-sequence masking) as a distinct phase | `Engine` | [Logits processing and sampling pipeline](260917-logits-processing.md) |
 | Orchestration / generation loop | **Build** — the facade + streamed decode loop | `Engine` | (covered by structure + this ADR) |
 | Performance | Measure against dotLLM; managed-first, `unsafe` only with sign-off | cross-cutting | [Performance baseline](planned-performance-baseline.md) |
 | Serving | Deferred until the generate loop works | (future `Server`) | (future) |
@@ -107,11 +107,11 @@ The one thing we cannot reuse-away is the model itself. Two external inputs feed
 
 ```mermaid
 flowchart TB
-    hub["HuggingFace Hub<br/>(model repos, e.g. bartowski)"]
-    nuget["NuGet packages (build-time)<br/>format parsing · tokenizer · math"]
+    hub["HuggingFace Hub (model repos, e.g. bartowski)"]
+    nuget["NuGet packages (build-time): format parsing, tokenizer, math"]
 
     subgraph disk["Local disk — fetched once, reused across runs"]
-        weights["model file(s)<br/>quantized weights +<br/>tokenizer + config"]
+        weights["model file(s): quantized weights, tokenizer, config"]
     end
 
     subgraph sln["InferenceEngine solution — net10.0"]
@@ -150,7 +150,7 @@ sequenceDiagram
     User->>Cli: run --model <path> --prompt "..."
     Cli->>Engine: CreateSession(modelPath, options)
     Engine->>Models: Load(path)
-    Note right of Models: parse header/metadata,<br/>mmap weight blob
+    Note right of Models: parse header/metadata, mmap weight blob
     Models-->>Engine: IModel + ModelConfig
     Engine->>Tok: Load(model metadata)
     Tok-->>Engine: ITokenizer
@@ -237,3 +237,4 @@ sources.
 | Date       | Change            | By                 |
 |------------|-------------------|--------------------|
 | 2026-09-01 | Initial proposal  | Aleksei Kolesnikov |
+| 2026-09-17 | Fixed dead link: KV-cache row pointed at the retired `planned-kv-cache.md` placeholder, now points at [260914-kv-cache.md](260914-kv-cache.md); updated the Sampling/logits row's follow-up link from the retired `planned-sampling-pipeline.md` placeholder to [260917-logits-processing.md](260917-logits-processing.md) | Aleksei Kolesnikov |

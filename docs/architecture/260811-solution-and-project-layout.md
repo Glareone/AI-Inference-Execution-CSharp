@@ -79,14 +79,20 @@ containing all five projects, each at `src/<ProjectName>/<ProjectName>.csproj` o
 `Directory.Build.props` sets shared settings (nullable enable, implicit usings enable,
 current C# language version) so individual `.csproj` files stay minimal.
 
-### Project reference graph
+### Container diagram (C4)
 
 Arrows point from a project to what it depends on. References only ever go "down" the stack,
-so there are no cycles and `Core` stays dependency-free.
+so there are no cycles and `Core` stays dependency-free. This is a
+[C4 model](https://c4model.com/) **Container diagram** — the whole system is one C4 "System"
+(the InferenceEngine solution running as a single process), and each project below is a
+container within it. No separate Context/Component/Code-level diagrams are maintained; per
+[260917](260917-logits-processing.md)'s own reasoning about not overengineering, this one level
+is the one that actually carries information for a solution this size, and building out the
+other three C4 levels for it would be ceremony without payoff.
 
 ```mermaid
 flowchart TB
-    cli["Cli (Exe)"] --> engine["Engine"]
+    cli["Cli (Exe)"] --> engine["Engine (sampling + logits processing)"]
     engine --> models["Models"]
     engine --> tok["Tokenizers"]
     engine --> core["Core"]
@@ -101,7 +107,7 @@ flowchart TB
 | Shared types / interfaces (`IModel`, `ITokenizer`, tensors, `ModelConfig`) | `Core` | Leaf with no deps, so every layer shares one vocabulary without cycles |
 | Format parsing + weight memory-mapping | `Models` | Loading is one bounded concern; keeps format details out of the generate loop |
 | Encode / decode, BPE vocab + merges | `Tokenizers` | Tokenization is independent of model math; swappable library |
-| Generation loop, sampling, KV-cache | `Engine` | The orchestration that ties loading + tokenizing into a token stream |
+| Generation loop, KV-cache, **sampling** (`ISamplerStep`/`SamplingPipeline`, probabilistic — temperature/top-k/top-p) **and logits processing** (`ILogitsProcessor`, deterministic — e.g. banned-sequence masking, see [260917](260917-logits-processing.md)) | `Engine` | The orchestration that ties loading + tokenizing into a token stream; sampling and logits processing are a phase split *within* `Engine`, not separate projects — see 260917 for why |
 | Arg parsing, console I/O, streaming output | `Cli` | Keeps process concerns out of the libraries; makes `Engine` reusable |
 
 ### Consequences
@@ -159,3 +165,4 @@ Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
 |------------|-------------------|-----------------|
 | 2026-08-11 | Initial proposal  | Aleksei Kolesnikov  |
 | 2026-09-01 | Renamed to the `YYMMDD-<slug>` convention; corrected dotLLM project count (10 → ~17); added a project-reference diagram and a "which project is responsible for what" table; moved the engineering challenges, external-dependency flow, and reference-project comparison out to the new challenges ADR (260901) | Aleksei Kolesnikov |
+| 2026-09-17 | Noted the logits-processor/sampler split inside Engine (see 260917-logits-processing.md); labeled the project-reference diagram as a C4 Container diagram | Aleksei Kolesnikov |

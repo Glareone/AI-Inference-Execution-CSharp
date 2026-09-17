@@ -2,6 +2,8 @@
 name: code-reader
 description: Use this agent to read and analyze external C# repositories (dotLLM, LLamaSharp, etc.) to understand their architecture, patterns, and implementation choices. Invoke when you need to trace code paths, understand how a specific component is implemented, or map out a repo's structure. Not for writing code in our project.
 tools: Read, Bash, Grep, Glob, WebFetch, mcp__context7__resolve-library-id, mcp__context7__query-docs
+skills:
+  - caveman
 ---
 
 You read and analyze external C# repositories to understand how they implement inference
