@@ -70,29 +70,33 @@ main first; implementation is the next round. Do steps 1-3 before 4-7 — they'r
    `FromWords(ITokenizer, IReadOnlyList<string>)` tokenizes each banned word once, at
    construction — not per generated token.
 3. `src/InferenceEngine.Engine/Sampling/SamplingPipeline.cs` — edit. Constructor takes
-   `IReadOnlyList<ILogitsProcessor>`. `Sample` gains `ReadOnlySpan<int> generatedTokenIds`. Run
-   every processor unconditionally, before the greedy/stochastic branch splits. This is the actual
-   fix: today the greedy path (`Temperature<=0`, the default) skips `_steps` entirely — a ban must
-   not skip.
-   - **Buffer**: `Apply` needs `Span<float>`; `Sample` takes `ReadOnlySpan<float>` and today only
-     copies to `_scratch` in the stochastic branch. When ≥1 processor is registered, copy to
-     `_scratch` unconditionally before the branch splits, run processors, then have greedy argmax
-     over `_scratch` instead of the raw input. Zero processors → skip the copy, both paths behave
-     exactly as today (no added cost when the feature isn't in use).
-   - **All-masked fallback**: if every logit is `-inf` after processors run, return EOS directly.
-     Today greedy's `best = 0` scan and the stochastic path's `Exp(-inf - -inf) = NaN` (NaN
-     comparisons are always `false`, so it falls through to `working.Length - 1`) both return an
-     arbitrary index with no such guard — verified against the actual code, this is a real bug,
-     not a hypothetical. Step 2's EOS-never-masked rule is the primary guarantee; this is the
-     defensive backstop.
+   `IReadOnlyList<ILogitsProcessor>` **and `int eosTokenId`** (needed for the fallback below —
+   `BannedSequenceLogitsProcessor` knowing EOS internally isn't enough, since the fallback lives
+   in `Sample`, not in any one processor). `Sample` gains `ReadOnlySpan<int> generatedTokenIds`.
+   Run every processor unconditionally, before the greedy/stochastic branch splits. This is the
+   actual fix: today the greedy path (`Temperature<=0`, the default) skips `_steps` entirely — a
+   ban must not skip.
+   - **Buffer**: `Apply` needs `Span<float>`. Today greedy never copies (argmaxes the read-only
+     input directly); stochastic always copies to `_scratch` before running `ISamplerStep`s,
+     processor or not — that copy is unchanged either way. The only *new* copy is on the greedy
+     side: when ≥1 processor is registered, greedy also copies to `_scratch` first, runs
+     processors, then argmaxes over `_scratch`. Zero processors → greedy keeps its existing
+     zero-copy path, unchanged.
+   - **All-masked fallback**: if every logit is `-inf` after processors run, return `eosTokenId`
+     directly (the new constructor parameter). Today greedy's `best = 0` scan and the stochastic
+     path's `Exp(-inf - -inf) = NaN` (NaN comparisons are always `false`, so it falls through to
+     `working.Length - 1`) both return an arbitrary index with no such guard — verified against
+     the actual code, this is a real bug, not a hypothetical. Step 2's EOS-never-masked rule is
+     the primary guarantee; this is the defensive backstop.
 4. `src/InferenceEngine.Engine/Config/GenerationOptions.cs` — edit. Add
    `IReadOnlyList<string>? BannedWords = null` at the end — the `= null` is required (a positional
    record can't have a required parameter after an optional one; all six existing ones already
    default), and with it the existing 6-argument call at `Program.cs:53` keeps compiling unchanged.
 5. `src/InferenceEngine.Engine/InferenceSession.cs` — edit. `GenerateCore` builds the processor
    list via `BannedSequenceLogitsProcessor.FromWords(_tokenizer, options.BannedWords ?? [])`,
-   tracks generated-id history, passes it into `Sample`. `PrefillTopLogits` stays untouched — raw
-   diagnostic view, deliberately unprocessed.
+   constructs `SamplingPipeline` passing `_tokenizer.EosTokenId` (step 3's new constructor
+   parameter), tracks generated-id history, passes it into `Sample`. `PrefillTopLogits` stays
+   untouched — raw diagnostic view, deliberately unprocessed.
 6. `src/InferenceEngine.Cli/Config/CliOptions.cs` + `.env.example` — edit. New flag/env var,
    comma-separated: `--ban-words "EPAM,EPAM ,E"` / `INFERENCE_BAN_WORDS`.
 7. `src/InferenceEngine.Cli/Program.cs` — edit. Thread the new option through. While here: switch

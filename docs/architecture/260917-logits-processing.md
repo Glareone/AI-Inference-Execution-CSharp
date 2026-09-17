@@ -188,14 +188,21 @@ guarantee a given step provides.
   processor has run, every logit is `float.NegativeInfinity` — a defensive backstop, not the
   primary guarantee (the EOS-never-masked rule above is). Both branches need this check: greedy's
   `best = 0` scan and the stochastic softmax's `NaN`-from-`Exp(-inf - -inf)` path both currently
-  return an arbitrary index with no such guard, which could be a banned token.
-- **Buffer**: `ILogitsProcessor.Apply` needs `Span<float>` (writable); `Sample` takes
-  `ReadOnlySpan<float>` and today only the stochastic branch copies into `_scratch`. When at least
-  one processor is registered, `Sample` copies into `_scratch` unconditionally, before the
-  greedy/stochastic split, runs every processor against it, then greedy argmaxes over `_scratch`
-  instead of the raw input. When no processors are registered (the common case — no bans
-  configured), the copy is skipped entirely and both paths behave exactly as they do today: zero
-  added cost when the feature isn't in use.
+  return an arbitrary index with no such guard, which could be a banned token. **This means
+  `SamplingPipeline` itself needs the EOS token id** — today its constructor takes only
+  `(GenerationOptions options, int vocabSize)`, with no path to `ITokenizer.EosTokenId` at all.
+  `BannedSequenceLogitsProcessor` knowing EOS internally (via its own `FromWords(ITokenizer, ...)`
+  factory) isn't enough — `Sample`'s fallback runs inside `SamplingPipeline`, not inside any one
+  processor, so it can't reach a processor's private state. Add an `int eosTokenId` constructor
+  parameter to `SamplingPipeline`; `InferenceSession.GenerateCore` passes `_tokenizer.EosTokenId`
+  when constructing it, same call site that already builds the processor list.
+- **Buffer**: `ILogitsProcessor.Apply` needs `Span<float>` (writable). Today, greedy never copies —
+  it argmaxes directly over the read-only input. Stochastic always copies into `_scratch` before
+  running `ISamplerStep`s, processor or not — that copy already exists and doesn't change. The
+  only *new* copy this ADR adds is on the greedy side: when at least one processor is registered,
+  greedy must also copy into `_scratch` first (a cost it doesn't pay today) so processors have
+  something writable to mutate, then argmax over `_scratch` instead of the raw input. With zero
+  processors registered, greedy keeps its existing zero-copy path, unchanged.
 - **`SamplingPipeline.Sample`** gains a `ReadOnlySpan<int> generatedTokenIds` parameter and runs
   every registered `ILogitsProcessor` unconditionally, before the greedy/stochastic branch
   splits. This is the one behavioral change this whole ADR exists to make correct — today a ban
@@ -318,3 +325,4 @@ Legend: 🟢 upside · 🟡 accepted trade-off · 🔴 downside.
 |------------|-------------------|--------------------|
 | 2026-09-17 | Initial proposal  | Aleksei Kolesnikov |
 | 2026-09-17 | CodeRabbit review: defined the all-masked-logits fallback (never mask EOS, plus a defensive backstop returning EOS if it happens anyway), specified the `_scratch` buffer mechanics processors need, corrected the `GenerationOptions` consequence — a `= null` default makes the addition safe, not risky | Aleksei Kolesnikov |
+| 2026-09-17 | CodeRabbit review, round 2: `SamplingPipeline` needs its own `eosTokenId` constructor parameter — the all-masked fallback lives in `Sample`, not in a processor, so `BannedSequenceLogitsProcessor` knowing EOS internally doesn't reach it. Corrected the buffer note: stochastic's existing `_scratch` copy was never going away, only greedy's *new* copy (when processors are registered) is new cost | Aleksei Kolesnikov |

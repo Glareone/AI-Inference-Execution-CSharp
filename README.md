@@ -286,4 +286,3 @@ history and [CHANGELOG.md](CHANGELOG.md) for the detailed change-by-change log.
   [reference-measurements-dotllm.md](experiments/reference-measurements-dotllm.md),
   [kv-layout-benchmark.md](experiments/kv-layout-benchmark.md)
 - [CHANGELOG.md](CHANGELOG.md) — notable changes, change by change
-- [CHANGELOG.md](CHANGELOG.md) — notable changes
