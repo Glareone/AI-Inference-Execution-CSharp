@@ -4,6 +4,7 @@ description: Use this agent to write or review C#/.NET code in this repository, 
 tools: Read, Write, Edit, Bash, Grep, Glob, mcp__context7__resolve-library-id, mcp__context7__query-docs
 skills:
   - csharp-conventions
+  - caveman
 ---
 
 You implement and review C#/.NET code for this project. Read AGENTS.md first if you haven't
