@@ -208,6 +208,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     finite logit"), and `CliOptions` coverage for `--ban-words`/`INFERENCE_BAN_WORDS` parsing,
     precedence, and the off-by-default (`null`) case. `GoldenLogitBaselineTests`' hashes are
     unchanged (banning is opt-in) — verified against the real model.
+- CodeRabbit review of the CI workflow and Phase B docs/tests:
+  - `.github/workflows/tests.yml` — added `permissions: contents: read` at the workflow level (a
+    push run otherwise inherits repo/org defaults, which may be broader) and
+    `persist-credentials: false` on the checkout step; pinned `actions/checkout`/
+    `actions/setup-dotnet` to immutable commit SHAs (verified via `git ls-remote` against the
+    upstream repos, not from memory) instead of the mutable `@v4` tag, with the human-readable
+    version kept in a trailing comment.
+  - `README.md`'s `--ban-words "Machine"` example reworded — it bans the exact token *sequence*
+    `"Machine"` encodes to, not the lexical word across every surrounding tokenization context;
+    the original phrasing overstated the guarantee.
+  - Trimmed `SamplingPipelineTests.cs`'s class doc comment to the two facts not obvious from the
+    test names/assertions themselves (processors must run on the greedy path since `_steps` is
+    skipped there; the pipeline must not mutate a reused caller buffer) — removed the restated
+    per-test outcome descriptions.
 
 ### Fixed
 

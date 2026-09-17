@@ -4,14 +4,11 @@ using InferenceEngine.Engine.Sampling;
 namespace InferenceEngine.Engine.Tests.Sampling;
 
 /// <summary>
-/// Business case: <see cref="SamplingPipeline"/> runs two distinct phases before returning a
-/// token — <see cref="ILogitsProcessor"/>s (deterministic hard constraints, e.g. banning) run
-/// unconditionally first, then, only for non-greedy decoding, the temperature -> top-k -> top-p
-/// <see cref="ISamplerStep"/> chain. Greedy decoding must be deterministic, sampling must be
-/// reproducible given the same seed, the pipeline must never mutate the caller's logits buffer
-/// (callers may reuse it, e.g. to log the original values afterward), and a hard constraint must
-/// take effect on the greedy path too — not just the stochastic one, which the pipeline's own
-/// <c>_steps</c> chain skips entirely by design.
+/// <see cref="ILogitsProcessor"/>s must run before sampling and on the greedy path too — the
+/// pipeline's own <see cref="ISamplerStep"/> <c>_steps</c> chain is skipped entirely for greedy
+/// decoding by design, so a hard constraint (e.g. banning) can't rely on that chain to apply.
+/// Callers may reuse their logits buffer afterward (e.g. to log original values), so the
+/// pipeline must never mutate it.
 /// </summary>
 public class SamplingPipelineTests
 {

@@ -22,7 +22,9 @@ dotnet run --project src/InferenceEngine.Cli -- --model /path/to/SmolLM2-135M-In
 The answer streams straight to the console. Or copy `.env.example` to `.env`, set
 `INFERENCE_MODEL`, and just run `dotnet run --project src/InferenceEngine.Cli`. Worth trying:
 `--temperature 0.7` for varied output instead of the deterministic default, or
-`--ban-words "Machine"` to see a specific word excluded from generation.
+`--ban-words "Machine"` to see that exact token sequence excluded from generation (it bans the
+tokenized sequence `"Machine"` encodes to, not the lexical word in every surrounding context —
+see [260917-logits-processing.md](docs/architecture/260917-logits-processing.md)).
 
 ## What We're Investigating
 
