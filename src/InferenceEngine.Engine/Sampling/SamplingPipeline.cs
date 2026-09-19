@@ -34,6 +34,15 @@ internal sealed class SamplingPipeline
         }
     }
 
+    /// <summary>
+    /// Runs every <see cref="ILogitsProcessor"/> unconditionally, before the greedy/stochastic
+    /// split — <see cref="ISamplerStep"/>'s <c>_steps</c> chain is skipped entirely for greedy
+    /// decoding, so a hard constraint (e.g. banning) can only take effect on both paths if it
+    /// runs ahead of that split, not inside it. If every logit is <c>-inf</c> after processors
+    /// run, returns the EOS token id directly (see the logits-processing ADR's all-masked
+    /// fallback) instead of falling into greedy's/softmax's undefined behavior on an all-masked
+    /// input.
+    /// </summary>
     public int Sample(ReadOnlySpan<float> logits, ReadOnlySpan<int> generatedTokenIds)
     {
         if (_greedy)

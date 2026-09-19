@@ -222,8 +222,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     test names/assertions themselves (processors must run on the greedy path since `_steps` is
     skipped there; the pipeline must not mutate a reused caller buffer) — removed the restated
     per-test outcome descriptions.
-
-### Fixed
+  - Same Docstring Coverage pre-merge check as previous rounds (`6ae9b9b` and the KV-cache round),
+    same resolution: the generic 80% threshold isn't a policy this repo opted into and conflicts
+    with `.coderabbit.yaml`'s own `**/*.cs` rule ("no WHAT comments, only WHY when non-obvious").
+    Added `<inheritdoc/>` to `BannedSequenceLogitsProcessor.Apply` (implements the
+    already-documented `ILogitsProcessor.Apply` contract) instead of restating it, and genuine WHY
+    docs where they were actually missing: `BannedSequenceLogitsProcessor.FromWords` (why it drops
+    zero-token/EOS-only words) and `SamplingPipeline.Sample` (why processors must run
+    unconditionally before the greedy/stochastic split, and the all-masked-EOS fallback). Left
+    self-explanatory or already-documented members alone — not chasing the percentage.
 
 CodeRabbit review findings on the POC PR:
 
