@@ -2,8 +2,15 @@ using InferenceEngine.Core;
 
 namespace InferenceEngine.Engine.Sampling;
 
+/// <summary>
+/// Bans literal token sequences from ever being generated — the same sequence-prefix-matching
+/// algorithm as HuggingFace's <c>NoBadWordsLogitsProcessor</c>. See the logits-processing ADR
+/// (<c>docs/architecture/260917-logits-processing.md</c>) for why sequence matching, not
+/// single-token banning, is required to ban a multi-token word.
+/// </summary>
 internal sealed class BannedSequenceLogitsProcessor(int eosTokenId, IReadOnlyList<int[]> bannedSequences) : ILogitsProcessor
 {
+    /// <inheritdoc/>
     public void Apply(Span<float> logits, ReadOnlySpan<int> generatedTokenIds)
     {
         foreach (var sequence in bannedSequences)
@@ -38,6 +45,12 @@ internal sealed class BannedSequenceLogitsProcessor(int eosTokenId, IReadOnlyLis
         }
     }
 
+    /// <summary>
+    /// Tokenizes each word once, at session setup, rather than per generated token. Drops a word
+    /// that encodes to zero tokens (an edge case <see cref="Apply"/>'s indexing doesn't need to
+    /// handle) or to a single EOS token — <see cref="ILogitsProcessor.Apply"/>'s own EOS-never-
+    /// masked rule would ignore it anyway, so storing it would only waste a comparison every call.
+    /// </summary>
     public static BannedSequenceLogitsProcessor FromWords(ITokenizer tokenizer, IReadOnlyList<string> words)
     {
         var sequences = new List<int[]>();
